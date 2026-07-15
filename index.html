@@ -1,0 +1,1867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notely — NYC EI</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#f0f4f8; --white:#ffffff; --border:#e2e8f0;
+      --primary:#16a34a; --primary-dark:#15803d; --primary-glow:rgba(22,163,74,0.12);
+      --green:#22c55e; --red:#ef4444; --yellow:#f59e0b;
+      --text:#1a202c; --muted:#718096; --light:#f7fafc;
+      --ui:'Sora',sans-serif; --mono:'DM Mono',monospace;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:var(--ui);min-height:100vh;display:flex;justify-content:center;padding:0 0 80px;}
+    .app{width:100%;max-width:480px;background:var(--white);}
+
+    /* TOP BAR — mimics Notely */
+    .topbar{background:var(--primary);padding:14px 16px 0;position:sticky;top:0;z-index:100;}
+    .topbar-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+    .topbar-close{color:rgba(255,255,255,0.85);font-size:1.3rem;cursor:pointer;padding:4px;}
+    .topbar-step{color:rgba(255,255,255,0.85);font-size:.75rem;font-family:var(--mono);text-align:center;}
+    .topbar-title{color:#fff;font-size:1.1rem;font-weight:700;text-align:center;margin-bottom:10px;}
+    .progress-bar{display:flex;gap:4px;padding-bottom:12px;}
+    .progress-seg{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,0.3);transition:background .3s;}
+    .progress-seg.done{background:#fff;}
+    .progress-seg.active{background:rgba(255,255,255,0.7);}
+
+    /* NAV TABS for Profile/Children */
+    .nav-strip{display:flex;border-bottom:2px solid var(--border);background:var(--white);}
+    .nav-strip-tab{flex:1;text-align:center;padding:12px 4px;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+    .nav-strip-tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+
+    /* PAGES */
+    .page{display:none;}.page.active{display:block;}
+
+    /* STEP CONTENT */
+    .step-content{padding:20px 16px;}
+    .step-page{display:none;}.step-page.active{display:block;}
+
+    /* FIELD GROUPS */
+    .field-group{margin-bottom:18px;}
+    .field-label{font-size:.72rem;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;}
+    .field-divider{border:none;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px;}
+
+    /* INPUTS */
+    select,input[type=text],input[type=date],input[type=time],input[type=number],textarea{
+      width:100%;background:var(--white);border:none;border-bottom:1.5px solid var(--border);
+      color:var(--text);font-family:var(--ui);font-size:.95rem;padding:10px 0 8px;
+      outline:none;transition:border-color .2s;appearance:none;border-radius:0;
+    }
+    select:focus,input:focus,textarea:focus{border-bottom-color:var(--primary);}
+    select option{background:#fff;}
+    textarea{border:1.5px solid var(--border);border-radius:10px;padding:12px;resize:none;line-height:1.6;margin-top:8px;}
+    textarea:focus{border-color:var(--primary);}
+
+    /* CHECKBOXES — Notely style */
+    .chk-list{display:flex;flex-direction:column;gap:0;}
+    .chk-item{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
+    .chk-item:last-child{border-bottom:none;}
+    .chk-box{width:22px;height:22px;border:2px solid var(--border);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+    .chk-box.on{background:var(--green);border-color:var(--green);}
+    .chk-box.on::after{content:'✓';color:#fff;font-size:.85rem;font-weight:700;}
+    .chk-label{font-size:.92rem;color:var(--text);line-height:1.35;}
+
+    /* GOAL TAGS */
+    .goal-chk-list{display:flex;flex-direction:column;gap:0;}
+    .goal-chk-item{display:flex;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
+    .goal-chk-item:last-child{border-bottom:none;}
+    .goal-chk-label{font-size:.9rem;color:var(--text);line-height:1.5;flex:1;}
+
+    /* SECTION HEADER */
+    .sec-header{background:var(--light);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:.9rem;color:var(--text);line-height:1.5;border-left:3px solid var(--primary);}
+
+    /* BOTTOM NAV */
+    .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--white);border-top:1px solid var(--border);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:100;}
+    .btn-back{background:var(--light);color:var(--primary);border:none;border-radius:24px;padding:12px 24px;font-family:var(--ui);font-size:.9rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;}
+    .btn-next{background:var(--primary);color:#fff;border:none;border-radius:24px;padding:12px 28px;font-family:var(--ui);font-size:.9rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .2s;}
+    .btn-next:disabled{opacity:.5;cursor:not-allowed;}
+    .btn-submit{background:var(--primary);color:#fff;border:none;border-radius:24px;padding:12px 28px;font-family:var(--ui);font-size:.9rem;font-weight:600;cursor:pointer;}
+
+    /* OUTPUT BLOCKS */
+    .out-block{background:var(--light);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;}
+    .out-block-hdr{background:#f0fdf4;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+    .out-block-title{font-family:var(--mono);font-size:.66rem;color:#15803d;text-transform:uppercase;letter-spacing:1px;font-weight:600;}
+    .cpybtn{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:var(--mono);font-size:.61rem;padding:3px 8px;cursor:pointer;transition:all .15s;}
+    .cpybtn:hover{border-color:var(--primary);color:var(--primary);}
+    .cpybtn.copied{border-color:var(--green);color:var(--green);}
+    .out-text{padding:12px 14px;font-size:.88rem;line-height:1.7;white-space:pre-wrap;min-height:44px;color:var(--text);}
+
+    /* SHIMMER */
+    .shim{background:linear-gradient(90deg,#e2e8f0 25%,#f0f4f8 50%,#e2e8f0 75%);background-size:200% 100%;animation:shim 1.4s infinite;border-radius:6px;height:13px;margin-bottom:7px;}
+    .shim.w90{width:90%}.shim.w70{width:70%}.shim.w50{width:50%}
+    @keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+    @keyframes sp{to{transform:rotate(360deg)}}
+
+    /* PROFILE/CHILDREN PAGES */
+    .inner-pad{padding:16px;}
+    .slabel{font-family:var(--mono);font-size:.66rem;color:var(--primary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+    .slabel::before{content:'';display:inline-block;width:12px;height:1px;background:var(--primary);}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+    .mb12{margin-bottom:12px;}
+    .btn-p{width:100%;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:13px;font-family:var(--ui);font-size:.92rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px;}
+    .btn-s{background:var(--light);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 13px;font-family:var(--ui);font-size:.8rem;cursor:pointer;}
+    .btn-d{background:rgba(239,68,68,.08);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:7px;padding:6px 10px;font-size:.72rem;cursor:pointer;}
+    .sbadge{background:rgba(34,197,94,.12);border:1px solid var(--green);color:var(--green);font-family:var(--mono);font-size:.63rem;padding:3px 10px;border-radius:4px;display:none;margin-top:8px;}
+    .ccard{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+    .cname{font-weight:700;font-size:.9rem;}
+    .cmeta{font-size:.7rem;color:var(--muted);font-family:var(--mono);margin-top:2px;line-height:1.5;}
+    .cacts{display:flex;gap:6px;flex-shrink:0;}
+    .gi-row{display:flex;gap:8px;margin-bottom:8px;}
+    .gi-row input{flex:1;}
+    .glist{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:10px;max-height:200px;overflow-y:auto;}
+    .gi{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border);font-size:.82rem;gap:8px;}
+    .gi:last-child{border-bottom:none;padding-bottom:0;}
+    .gi-t{flex:1;line-height:1.4;}
+    .gi-x{background:transparent;border:none;color:var(--red);cursor:pointer;font-size:1rem;padding:0 4px;flex-shrink:0;}
+    .pbanner{background:var(--light);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+    .prow{display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:4px;}
+    .prow:last-child{margin-bottom:0;}
+    .pk{color:var(--muted);font-family:var(--mono);font-size:.68rem;}
+    .pv{color:var(--text);font-weight:600;}
+    .ibox{background:var(--light);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.8rem;color:var(--muted);line-height:1.5;}
+    .ebox{background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:8px;padding:10px 12px;font-size:.82rem;color:#c53030;margin-top:10px;}
+    .div{border:none;border-top:1px solid var(--border);margin:16px 0;}
+    .compliance-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+    .comp-badge{background:#f0fdf4;border:1px solid var(--primary);color:#15803d;font-family:var(--mono);font-size:.6rem;padding:3px 8px;border-radius:4px;letter-spacing:.5px;}
+
+    /* Input inside field group with border bottom style */
+    .field-group select, .field-group input[type=text], .field-group input[type=date], .field-group input[type=time] {
+      font-size:.95rem; color:var(--text);
+    }
+    .field-val{font-size:.95rem;color:var(--text);padding:10px 0 8px;border-bottom:1.5px solid var(--border);}
+
+    /* Profile inputs need background */
+    .inner-pad select, .inner-pad input[type=text], .inner-pad input[type=date], .inner-pad input[type=number] {
+      border:1px solid var(--border); border-radius:8px; padding:9px 10px; background:var(--white);
+    }
+  
+    /* HIPAA GATE */
+    .hipaa-gate{position:fixed;inset:0;background:#fff;z-index:9999;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:28px 24px;max-width:480px;margin:0 auto;}
+    .hipaa-logo{font-size:2.2rem;margin-bottom:8px;}
+    .hipaa-title{font-size:1.3rem;font-weight:700;color:var(--text);margin-bottom:4px;text-align:center;}
+    .hipaa-subtitle{font-size:.78rem;color:var(--muted);font-family:var(--mono);margin-bottom:24px;text-align:center;letter-spacing:.5px;}
+    .hipaa-card{background:var(--light);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:20px;width:100%;}
+    .hipaa-card p{font-size:.84rem;color:var(--text);line-height:1.65;margin-bottom:10px;}
+    .hipaa-card p:last-child{margin-bottom:0;}
+    .hipaa-check-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;cursor:pointer;}
+    .hipaa-check-row input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--primary);flex-shrink:0;}
+    .hipaa-check-row span{font-size:.84rem;color:var(--text);line-height:1.5;}
+    .hipaa-btn{width:100%;background:var(--primary);color:#fff;border:none;border-radius:12px;padding:15px;font-family:var(--ui);font-size:1rem;font-weight:700;cursor:pointer;opacity:.5;transition:opacity .2s;}
+    .hipaa-btn.ready{opacity:1;}
+    .hipaa-version{font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-top:14px;}
+
+    /* NOTES HISTORY */
+    .note-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:8px;cursor:pointer;transition:border-color .15s;}
+    .note-card:hover{border-color:var(--primary);}
+    .note-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;}
+    .note-card-name{font-weight:700;font-size:.9rem;}
+    .note-card-date{font-size:.72rem;color:var(--muted);font-family:var(--mono);}
+    .note-card-meta{font-size:.72rem;color:var(--muted);font-family:var(--mono);}
+    .note-card-preview{font-size:.8rem;color:var(--text);margin-top:6px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .note-detail{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:12px;display:none;}
+    .note-detail.open{display:block;}
+
+    /* ATTENDANCE LOG */
+    .att-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+    .att-card-left .att-name{font-weight:700;font-size:.88rem;}
+    .att-card-left .att-meta{font-size:.7rem;color:var(--muted);font-family:var(--mono);margin-top:2px;}
+    .att-status{font-size:.72rem;font-family:var(--mono);padding:4px 10px;border-radius:20px;font-weight:600;}
+    .att-status.attended{background:rgba(34,197,94,.12);color:#15803d;}
+    .att-status.cancelled{background:rgba(239,68,68,.1);color:var(--red);}
+    .att-status.makeup{background:rgba(245,158,11,.1);color:#b45309;}
+
+  
+    /* SERVICE LOG */
+    .slog-header{background:var(--light);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:14px;}
+    .slog-header-row{display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:5px;}
+    .slog-header-row:last-child{margin-bottom:0;}
+    .slog-hk{color:var(--muted);font-family:var(--mono);font-size:.68rem;text-transform:uppercase;}
+    .slog-hv{color:var(--text);font-weight:600;font-size:.82rem;}
+    .slog-child-select{margin-bottom:14px;}
+    .slog-row{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:8px;}
+    .slog-row-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+    .slog-row-date{font-weight:700;font-size:.9rem;}
+    .slog-row-meta{font-size:.7rem;color:var(--muted);font-family:var(--mono);}
+    .slog-row-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+    .slog-field{font-size:.75rem;}
+    .slog-field-label{color:var(--muted);font-family:var(--mono);font-size:.65rem;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;}
+    .slog-field-val{color:var(--text);font-weight:600;}
+    .slog-sig-area{border-top:1px solid var(--border);padding-top:10px;margin-top:4px;}
+    .slog-sig-label{font-size:.72rem;color:var(--muted);font-family:var(--mono);text-transform:uppercase;margin-bottom:6px;}
+    .slog-sig-row{display:flex;gap:8px;align-items:center;}
+    .slog-sig-input{flex:1;background:var(--white);border:none;border-bottom:1.5px solid var(--border);color:var(--text);font-family:var(--ui);font-size:.88rem;padding:6px 0;outline:none;}
+    .slog-sig-input:focus{border-bottom-color:var(--primary);}
+    .slog-sig-date{width:130px;background:var(--white);border:none;border-bottom:1.5px solid var(--border);color:var(--text);font-family:var(--ui);font-size:.85rem;padding:6px 0;outline:none;}
+    .slog-signed-badge{background:rgba(22,163,74,.1);border:1px solid var(--primary);color:#15803d;font-family:var(--mono);font-size:.65rem;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+    .slog-unsigned-badge{background:rgba(245,158,11,.1);border:1px solid #f59e0b;color:#b45309;font-family:var(--mono);font-size:.65rem;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+    .slog-sign-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:var(--ui);font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap;}
+    .slog-stats{display:flex;gap:8px;margin-bottom:14px;}
+    .slog-stat{flex:1;background:var(--light);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;}
+    .slog-stat-num{font-size:1.4rem;font-weight:700;color:var(--primary);}
+    .slog-stat-lbl{font-size:.68rem;color:var(--muted);font-family:var(--mono);text-transform:uppercase;margin-top:2px;}
+    .slog-export-btn{width:100%;background:var(--light);border:1px solid var(--primary);color:var(--primary);border-radius:10px;padding:11px;font-family:var(--ui);font-size:.85rem;font-weight:600;cursor:pointer;margin-bottom:14px;}
+
+  
+    /* VALIDATION */
+    .val-error{background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:10px;padding:11px 14px;font-size:.84rem;color:#c53030;margin-top:10px;display:none;}
+    .val-error.show{display:block;}
+    input.field-error, select.field-error{border-bottom:2px solid var(--red)!important;box-shadow:none!important;}
+
+  
+    /* NOTE VIEWER */
+    .note-viewer{background:#fff;border:2px solid #333;border-radius:4px;padding:16px;margin-top:14px;font-family:'Times New Roman',serif;font-size:.82rem;color:#000;line-height:1.4;}
+    .note-viewer-title{text-align:center;font-weight:700;font-size:.9rem;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:6px;}
+    .note-viewer-header-row{display:flex;gap:0;border-bottom:1px solid #000;}
+    .note-viewer-cell{flex:1;padding:4px 6px;border-right:1px solid #000;font-size:.76rem;}
+    .note-viewer-cell:last-child{border-right:none;}
+    .note-viewer-cell-label{font-weight:700;font-size:.7rem;}
+    .note-viewer-cell-val{font-size:.76rem;border-bottom:1px solid #000;min-height:16px;margin-top:2px;}
+    .note-viewer-full-row{border-bottom:1px solid #000;padding:4px 6px;font-size:.76rem;}
+    .note-viewer-section{border-bottom:1px solid #000;padding:8px 6px;}
+    .note-viewer-section-title{font-weight:700;font-size:.78rem;margin-bottom:6px;}
+    .note-viewer-section-body{font-size:.78rem;line-height:1.5;min-height:60px;white-space:pre-wrap;}
+    .note-viewer-sig-row{display:flex;border-top:1px solid #000;}
+    .note-viewer-sig-cell{flex:1;padding:6px;border-right:1px solid #000;font-size:.72rem;}
+    .note-viewer-sig-cell:last-child{border-right:none;}
+    .note-viewer-sig-line{border-bottom:1px solid #000;margin:8px 0 3px;min-height:20px;}
+    .note-viewer-close{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:.8rem;cursor:pointer;margin-top:10px;width:100%;}
+
+  </style>
+</head>
+<body>
+
+<!-- HIPAA GATE -->
+<div class="hipaa-gate" id="hipaaGate">
+  <div class="hipaa-logo">🔒</div>
+  <div class="hipaa-title">Notely</div>
+  <div class="hipaa-subtitle">NYC EI · HIPAA ACKNOWLEDGMENT</div>
+  <div class="hipaa-card">
+    <p><strong>This application is for authorized use only.</strong> By accessing Notely, you acknowledge and agree to the following:</p>
+    <p>• All session notes and child information entered are Protected Health Information (PHI) under HIPAA.</p>
+    <p>• You are responsible for ensuring your device is secure, password-protected, and not accessible to unauthorized individuals.</p>
+    <p>• Do not share, screenshot, or transmit session data through unsecured channels.</p>
+    <p>• Notes stored in this app remain on your device only and are not transmitted to any third party.</p>
+    <p>• You must log out or close the app when not in use in the presence of others.</p>
+  </div>
+  <label class="hipaa-check-row">
+    <input type="checkbox" id="hipaaChk" onchange="onHipaaCheck()"/>
+    <span>I understand and agree to handle all Protected Health Information (PHI) in compliance with HIPAA regulations and NYC Early Intervention program requirements.</span>
+  </label>
+  <button class="hipaa-btn" id="hipaaContinueBtn" onclick="acceptHipaa()" disabled>Continue to Notely</button>
+  <div class="hipaa-version">v4.0 · NYC EI Individual Session Note 6/13/2025</div>
+</div>
+
+<div class="app" id="mainApp" style="display:none;">
+
+  <!-- TOP STRIP NAV (Profile / Children / Note) -->
+  <div class="nav-strip">
+    <div class="nav-strip-tab active" onclick="showPage('note',this)">📋 Note</div>
+    <div class="nav-strip-tab" onclick="showPage('children',this)">👶 Children</div>
+    <div class="nav-strip-tab" onclick="showPage('profile',this)">⚙️ Profile</div>
+    <div class="nav-strip-tab" onclick="showPage('history',this)">📝 History</div>
+    <div class="nav-strip-tab" onclick="showPage('attendance',this)">✅ Attended</div>
+    <div class="nav-strip-tab" onclick="showPage('servicelog',this)">📋 Service Log</div>
+  </div>
+
+  <!-- ══════════ NOTE FLOW ══════════ -->
+  <div class="page active" id="page-note">
+
+    <!-- TOP BAR -->
+    <div class="topbar" id="noteTopbar">
+      <div class="topbar-row1">
+        <div class="topbar-close" onclick="if(confirm('Exit note?'))resetNote()">✕</div>
+        <div class="topbar-step" id="stepLabel">Step 1 of 7</div>
+        <div style="width:28px;"></div>
+      </div>
+      <div class="topbar-title" id="stepTitle">Session Attendance</div>
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-seg active"></div>
+        <div class="progress-seg"></div>
+        <div class="progress-seg"></div>
+        <div class="progress-seg"></div>
+        <div class="progress-seg"></div>
+        <div class="progress-seg"></div>
+        <div class="progress-seg"></div>
+      </div>
+    </div>
+
+    <!-- STEP 1 — SESSION ATTENDANCE -->
+    <div class="step-page active" id="step1">
+      <div class="step-content">
+
+        <!-- Child selector -->
+        <div class="field-group field-divider">
+          <div class="field-label">Child</div>
+          <select id="childSel" onchange="onChildChange()">
+            <option value="">— Select Child —</option>
+          </select>
+        </div>
+
+        <div class="field-group field-divider">
+          <div class="field-label">Session Date</div>
+          <input type="date" id="sessDate"/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">Time From</div>
+          <input type="time" id="timeFrom"/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">Time To</div>
+          <input type="time" id="timeTo"/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">IFSP Service Location</div>
+          <select id="servLoc">
+            <option value="">Select...</option>
+            <option>Community</option>
+            <option>Day Care</option>
+            <option>Home</option>
+            <option>Telehealth</option>
+          </select>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">Session Delivered</div>
+          <select id="sessDelivered">
+            <option value="">Select...</option>
+            <option>In-Person</option>
+            <option>Telehealth</option>
+          </select>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">Intensity</div>
+          <select id="intensity">
+            <option value="Individual">Individual</option>
+            <option value="Group">Group</option>
+          </select>
+        </div>
+
+        <div class="field-label" style="margin-bottom:12px;">Participants</div>
+        <div class="chk-list">
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Child">
+            <div class="chk-box"></div><span class="chk-label">Child</span>
+          </div>
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Parent/Caregiver">
+            <div class="chk-box"></div><span class="chk-label">Parent/Caregiver</span>
+          </div>
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Other Participant">
+            <div class="chk-box"></div><span class="chk-label">Other Participant</span>
+          </div>
+        </div>
+
+        <div class="field-group field-divider" style="margin-top:14px;">
+          <div class="field-label">Other Participants</div>
+          <input type="text" id="otherParticipants" placeholder="e.g. Grandmother, Nanny..."/>
+        </div>
+
+        <div class="chk-list">
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Covisit">
+            <div class="chk-box"></div><span class="chk-label">Covisit</span>
+          </div>
+        </div>
+
+        <div class="field-group field-divider" style="margin-top:14px;">
+          <div class="field-label">Attendance Status</div>
+          <select id="attendStatus">
+            <option>Attended</option>
+            <option>Cancelled by Family</option>
+            <option>Cancelled by Provider</option>
+            <option>No Show</option>
+          </select>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">Cancellation Reason</div>
+          <input type="text" id="cancelReason" placeholder="If applicable..."/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">If Missed, Session must be made up by</div>
+          <input type="date" id="makeupBy"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">If Makeup, makeup session for missed session on</div>
+          <input type="date" id="makeupFor"/>
+        </div>
+
+        <div id="step1Error" style="display:none;background:rgba(239,68,68,.1);border:1px solid var(--red);border-radius:10px;padding:12px 14px;font-size:.86rem;color:#c53030;margin-top:12px;font-weight:600;"></div>
+      </div>
+    </div>
+
+    <!-- STEP 2 — SESSION CODING -->
+    <div class="step-page" id="step2">
+      <div class="step-content">
+        <div id="codingAutofill" class="pbanner" style="display:none;margin-bottom:18px;"></div>
+        <div class="field-group field-divider">
+          <div class="field-label">ICD-10 Code</div>
+          <input type="text" id="icdCode" placeholder="e.g. F84.0"/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">CPT Code</div>
+          <input type="text" id="cptCode" placeholder="e.g. 97155"/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">2nd CPT Code (optional)</div>
+          <input type="text" id="cptCode2" placeholder="optional"/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">3rd CPT Code (optional)</div>
+          <input type="text" id="cptCode3" placeholder="optional"/>
+        </div>
+        <div class="field-group field-divider">
+          <div class="field-label">4th CPT Code (optional)</div>
+          <input type="text" id="cptCode4" placeholder="optional"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 — SESSION RESULTS -->
+    <div class="step-page" id="step3">
+      <div class="step-content">
+
+        <!-- Main narrative prompt -->
+        <div class="sec-header">Describe what happened during today's session and the progress made toward the IFSP outcome(s). Include the routine activity and the strategies used in the session. When available, include the parent/caregiver feedback on how they incorporated the strategies between sessions.</div>
+        <div class="field-label" style="margin-bottom:4px;">Your Raw Notes (AI will expand)</div>
+        <textarea id="rawNotes" rows="5" placeholder="e.g. worked on puzzle, baby pointed and said baba, mom practiced wait time, child reached for cup independently, used modeling with stacking rings..."></textarea>
+
+        <div class="div"></div>
+
+        <!-- IFSP Goals -->
+        <div class="sec-header" style="margin-bottom:10px;">IFSP Functional Outcome(s) and developmental step(s) addressed during this session:</div>
+        <div id="goalsList">
+          <div class="ibox">Select a child in Step 1 to load their IFSP goals.</div>
+        </div>
+
+        <!-- NA text box — plain, pre-filled with NA, clearable — matches EI app exactly -->
+        <div style="position:relative;margin-top:14px;margin-bottom:4px;">
+          <textarea id="naBox" rows="4"
+            style="width:100%;border:1.5px solid var(--border);border-radius:10px;padding:12px 36px 12px 12px;font-size:.95rem;color:var(--text);font-family:var(--ui);resize:none;outline:none;background:#fff;line-height:1.5;"
+            placeholder="NA">NA</textarea>
+          <button onclick="document.getElementById('naBox').value='';"
+            style="position:absolute;top:10px;right:10px;background:transparent;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;line-height:1;">×</button>
+        </div>
+
+        <div class="div"></div>
+
+        <!-- Coaching -->
+        <div class="sec-header" style="margin-bottom:10px;">How did you work with the parent/caregiver?</div>
+        <div class="chk-list" id="coachingList">
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Observed parent/caregiver and child during routines">
+            <div class="chk-box"></div><span class="chk-label">Observed parent/caregiver and child during routines</span>
+          </div>
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Parent/caregiver tried activity; feedback exchanged">
+            <div class="chk-box"></div><span class="chk-label">Parent/caregiver tried activity; feedback exchanged</span>
+          </div>
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Demonstrated activity to parent/caregiver">
+            <div class="chk-box"></div><span class="chk-label">Demonstrated activity to parent/caregiver</span>
+          </div>
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Reviewed communication tool with parent/caregiver">
+            <div class="chk-box"></div><span class="chk-label">Reviewed communication tool with parent/caregiver</span>
+          </div>
+          <div class="chk-item" onclick="toggleChk(this)" data-val="Other Collaboration">
+            <div class="chk-box"></div><span class="chk-label">Other Collaboration</span>
+          </div>
+        </div>
+        <div class="field-group" style="margin-top:10px;">
+          <div class="field-label">Other Collaboration</div>
+          <input type="text" id="otherCollab" placeholder="Describe other collaboration..."/>
+        </div>
+
+        <div class="div"></div>
+
+        <!-- Section 5 -->
+        <div class="sec-header" style="margin-bottom:10px;"><strong>4.</strong> What strategies/activities did you and the parent/caregiver collaboratively agree to do to support their child's learning and development between visits?</div>
+        <textarea id="caregiverAgreedText" rows="6"
+          style="width:100%;border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:.95rem;color:var(--text);font-family:var(--ui);resize:none;outline:none;background:#fff;line-height:1.6;"
+          placeholder="Describe what you and the parent/caregiver agreed to do between visits..."></textarea>
+
+      </div>
+    </div>
+
+    <!-- STEP 4 — CAREGIVER DETAILS -->
+    <div class="step-page" id="step4">
+      <div class="step-content">
+        <div class="field-group field-divider">
+          <div class="field-label">Caregiver's Relationship to Child</div>
+          <select id="caregiverRelation">
+            <option value="">Select...</option>
+            <option>Mother</option>
+            <option>Father</option>
+            <option>Grandmother</option>
+            <option>Grandfather</option>
+            <option>Aunt/Uncle</option>
+            <option>Nanny/Babysitter</option>
+            <option>Foster Parent</option>
+            <option>Legal Guardian</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- STEP 5 — AI GENERATE + EDITABLE NOTE -->
+    <div class="step-page" id="step5">
+      <div class="step-content">
+
+        <!-- Generate button row -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div style="font-family:var(--mono);font-size:.68rem;color:var(--primary);text-transform:uppercase;letter-spacing:1px;">Review &amp; Edit Note</div>
+          <div class="comp-badge">✓ NYC EI 6/13/2025</div>
+        </div>
+
+        <button class="btn-p" id="genBtn" onclick="generateNote()" style="margin-bottom:20px;">
+          <span>✨ Generate AI Session Note</span>
+        </button>
+
+        <!-- EDITABLE NOTE FORM — mimics actual NYC EI form -->
+        <div id="outSec" style="display:none;">
+
+          <!-- Note header card -->
+          <div style="border:2px solid var(--primary);border-radius:12px;overflow:hidden;margin-bottom:16px;">
+            <div style="background:var(--primary);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+              <div style="color:#fff;font-weight:700;font-size:.9rem;">NYC EI Individual Session Note (Home/Facility)</div>
+              <div style="color:rgba(255,255,255,.8);font-family:var(--mono);font-size:.62rem;">6/13/2025</div>
+            </div>
+            <div id="oHdrDisplay" style="padding:12px 14px;font-size:.78rem;line-height:1.8;color:var(--text);white-space:pre-wrap;background:var(--light);"></div>
+            <div style="padding:8px 14px;background:var(--light);border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
+              <button class="cpybtn" onclick="copyBlk('oHdrDisplay',this)">Copy Header</button>
+            </div>
+          </div>
+
+          <!-- Section 1 — AI Narrative (hidden, still used for generation) -->
+          <textarea id="oNarrative" style="display:none;"></textarea>
+
+          <!-- Section 2 -->
+          <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;">
+            <div style="background:var(--light);padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-family:var(--mono);font-size:.68rem;color:var(--primary);text-transform:uppercase;letter-spacing:1px;font-weight:600;">2. IFSP Functional Outcomes &amp; Objectives Addressed</div>
+              <button class="cpybtn" onclick="copyBlk('oGoals',this)">Copy</button>
+            </div>
+            <div style="padding:4px 10px 10px;">
+              <textarea id="oGoals" rows="4" style="border:1px solid var(--border);border-radius:8px;padding:10px;font-size:.86rem;line-height:1.65;width:100%;resize:vertical;background:#fff;color:var(--text);font-family:var(--ui);outline:none;margin-top:8px;" placeholder="Selected IFSP goals will appear here..."></textarea>
+            </div>
+          </div>
+
+          <!-- Section 3 — Coaching -->
+          <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;">
+            <div style="background:var(--light);padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-family:var(--mono);font-size:.68rem;color:var(--primary);text-transform:uppercase;letter-spacing:1px;font-weight:600;">3. How Did You Coach the Parent/Caregiver?</div>
+              <button class="cpybtn" onclick="copyBlk('oCoaching',this)">Copy</button>
+            </div>
+            <div style="padding:4px 10px 10px;">
+              <textarea id="oCoaching" rows="3" style="border:1px solid var(--border);border-radius:8px;padding:10px;font-size:.86rem;line-height:1.65;width:100%;resize:vertical;background:#fff;color:var(--text);font-family:var(--ui);outline:none;margin-top:8px;" placeholder="Coaching methods will appear here..."></textarea>
+            </div>
+          </div>
+
+          <!-- Section 4 — Sec 5 -->
+          <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px;">
+            <div style="background:var(--light);padding:9px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-family:var(--mono);font-size:.68rem;color:var(--primary);text-transform:uppercase;letter-spacing:1px;font-weight:600;">4. Caregiver Agreed Strategies (Between Visits)</div>
+              <button class="cpybtn" onclick="copyBlk('oSec5',this)">Copy</button>
+            </div>
+            <div style="padding:4px 10px 10px;">
+              <textarea id="oSec5" rows="4" style="border:1px solid var(--border);border-radius:8px;padding:10px;font-size:.86rem;line-height:1.65;width:100%;resize:vertical;background:#fff;color:var(--text);font-family:var(--ui);outline:none;margin-top:8px;" placeholder="Caregiver agreed strategies will appear here..."></textarea>
+            </div>
+          </div>
+
+          <!-- Edit notice -->
+          <div style="background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:.78rem;color:#15803d;line-height:1.5;">
+            ✏️ All sections above are editable. Make any changes before submitting.
+          </div>
+
+          <!-- Submit button -->
+          <button class="btn-p" id="submitNoteBtn" onclick="submitNote()" style="background:#15803d;">
+            <span>✅ Submit &amp; Save Note</span>
+          </button>
+
+          <div id="submitSuccess" style="display:none;background:rgba(22,163,74,.1);border:1px solid var(--primary);border-radius:10px;padding:12px 14px;margin-top:12px;text-align:center;">
+            <div style="font-size:1.1rem;margin-bottom:4px;">✅</div>
+            <div style="font-weight:700;color:#15803d;font-size:.9rem;">Note Submitted!</div>
+            <div style="font-size:.76rem;color:var(--muted);margin-top:4px;">Saved to History &amp; Service Log updated.</div>
+          </div>
+
+          <div id="eBox" class="ebox" style="display:none;margin-top:10px;"></div>
+          <div class="val-error" id="step5Error"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6 — SIGNATURES -->
+    <div class="step-page" id="step6">
+      <div class="step-content">
+
+        <!-- Session summary -->
+        <div style="background:var(--light);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:20px;">
+          <div class="slog-header-row"><span class="slog-hk">Child</span><span class="slog-hv" id="slogSigChild">—</span></div>
+          <div class="slog-header-row"><span class="slog-hk">Date of Service</span><span class="slog-hv" id="slogSigDate">—</span></div>
+          <div class="slog-header-row"><span class="slog-hk">Time</span><span class="slog-hv" id="slogSigTime">—</span></div>
+          <div class="slog-header-row"><span class="slog-hk">CPT Code</span><span class="slog-hv" id="slogSigCPT">—</span></div>
+          <div class="slog-header-row"><span class="slog-hk">Delivery</span><span class="slog-hv" id="slogSigDelivery">—</span></div>
+        </div>
+
+        <!-- PARENT SIGNATURE -->
+        <div style="background:var(--primary);border-radius:10px 10px 0 0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="color:#fff;font-weight:700;font-size:.9rem;">Parent / Caregiver Sign Here</div>
+          <div style="color:rgba(255,255,255,.8);font-size:.72rem;font-family:var(--mono);">SIGNATURE 1 OF 2</div>
+        </div>
+        <div style="border:1.5px solid var(--primary);border-top:none;border-radius:0 0 10px 10px;padding:12px;margin-bottom:6px;">
+          <div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;text-align:center;">Parent/Caregiver verifies service was delivered on date and time indicated</div>
+          <canvas id="parentSigCanvas"
+            style="border:1.5px solid var(--border);border-radius:10px;width:100%;touch-action:none;cursor:crosshair;background:#fff;"
+            height="200"></canvas>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn-s" style="flex:1;" onclick="clearCanvas('parentSigCanvas')">Clear</button>
+            <div style="flex:2;display:flex;align-items:center;">
+              <input type="date" id="slogParentSigDate" style="border:none;border-bottom:1.5px solid var(--border);width:100%;padding:6px 0;font-size:.85rem;outline:none;background:transparent;"/>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:16px;"></div>
+
+        <!-- PROVIDER SIGNATURE -->
+        <div style="background:#15803d;border-radius:10px 10px 0 0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="color:#fff;font-weight:700;font-size:.9rem;">Provider Sign Here</div>
+          <div style="color:rgba(255,255,255,.8);font-size:.72rem;font-family:var(--mono);">SIGNATURE 2 OF 2</div>
+        </div>
+        <div style="border:1.5px solid #15803d;border-top:none;border-radius:0 0 10px 10px;padding:12px;margin-bottom:16px;">
+          <div style="font-size:.76rem;color:var(--muted);margin-bottom:8px;text-align:center;">Provider certifies that services were rendered as documented</div>
+          <canvas id="providerSigCanvasStep6"
+            style="border:1.5px solid var(--border);border-radius:10px;width:100%;touch-action:none;cursor:crosshair;background:#fff;"
+            height="200"></canvas>
+          <div style="margin-top:8px;">
+            <button class="btn-s" style="width:100%;" onclick="clearCanvas('providerSigCanvasStep6')">Clear</button>
+          </div>
+        </div>
+
+        <button class="btn-p" onclick="saveServiceLogSig()" style="background:#15803d;margin-bottom:14px;">
+          <span>Confirm Both Signatures &amp; Save</span>
+        </button>
+
+        <div class="val-error" id="step6Error"></div>
+        <div id="slogSigSuccess" style="display:none;background:rgba(22,163,74,.1);border:1px solid var(--primary);border-radius:10px;padding:12px 14px;text-align:center;">
+          <div style="font-size:1.1rem;margin-bottom:4px;">✅</div>
+          <div style="font-weight:700;color:#15803d;font-size:.9rem;">Signatures Saved!</div>
+          <div style="font-size:.76rem;color:var(--muted);margin-top:4px;">Service Log updated. Tap Next to complete.</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- STEP 7 — SESSION COMPLETE -->
+    <div class="step-page" id="step7">
+      <div class="step-content" style="padding-top:40px;text-align:center;">
+        <div style="font-size:3rem;margin-bottom:12px;">✅</div>
+        <div style="font-weight:700;color:#15803d;font-size:1.2rem;margin-bottom:8px;">Session Complete!</div>
+        <div style="font-size:.85rem;color:var(--muted);margin-bottom:24px;line-height:1.6;">Note saved · Service Log updated · Both signatures recorded.</div>
+        <div style="background:var(--light);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:24px;text-align:left;">
+          <div class="slog-header-row"><span class="slog-hk">Child</span><span class="slog-hv" id="completeSigChild">—</span></div>
+          <div class="slog-header-row"><span class="slog-hk">Date</span><span class="slog-hv" id="completeSigDate">—</span></div>
+          <div class="slog-header-row"><span class="slog-hk">Status</span><span class="slog-hv" style="color:#15803d;">✓ Fully Documented</span></div>
+        </div>
+        <button class="btn-p" onclick="startNewNote()" style="background:#15803d;">Start New Note</button>
+        <div id="providerSigSuccess" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav" id="noteBottomNav">
+      <button class="btn-back" id="backBtn" onclick="prevStep()">← Back</button>
+      <button class="btn-next" id="nextBtn" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+
+  <!-- ══════════ CHILDREN PAGE ══════════ -->
+  <div class="page" id="page-children">
+    <div class="inner-pad">
+      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:12px;margin-bottom:14px;margin-top:8px;">
+        <div style="font-size:.78rem;font-weight:700;color:#856404;margin-bottom:8px;">🔍 Data Recovery</div>
+        <div style="font-size:.75rem;color:#856404;margin-bottom:8px;">If your children are missing, tap below to find and restore them.</div>
+        <button class="btn-p" style="background:#856404;padding:10px;" onclick="findAndRestoreData()">Find My Data</button>
+        <div id="diagResult" style="margin-top:10px;font-size:.75rem;font-family:var(--mono);color:var(--text);white-space:pre-wrap;display:none;background:var(--light);border-radius:8px;padding:10px;"></div>
+      </div>
+      <div class="slabel" id="childFormLbl" style="margin-top:8px;">Add New Child</div>
+
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Child's Full Name</div><input type="text" id="nCName" placeholder="e.g. Jaylen Smith"/></div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Date of Birth</div><input type="date" id="nCDOB"/></div>
+      </div>
+      <div class="g3 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Sex</div><select id="nCSex"><option value="">—</option><option>Male</option><option>Female</option></select></div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">EI #</div><input type="text" id="nCEI" placeholder="EI #"/></div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Auth #</div><input type="text" id="nCAuth" placeholder="Auth #"/></div>
+      </div>
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Service Type</div>
+          <select id="nCServType"><option value="">Select...</option><option>Speech-Language (ST)</option><option>Occupational Therapy (OT)</option><option>Physical Therapy (PT)</option><option>Special Education (SEIT)</option><option>Developmental Intervention (DI)</option><option>Special Instruction (SI)</option><option>ABA</option><option>Vision</option><option>Hearing</option><option>Nutrition</option><option>Psychology</option><option>Service Coordination</option></select>
+        </div>
+<div></div>
+      </div>
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Approach</div>
+          <select id="nCApproach">
+            <option value="">None</option>
+            <option>ABA</option>
+            <option>DIR/Floortime</option>
+            <option>PECS</option>
+            <option>RDI</option>
+            <option>Naturalistic</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Session Duration (min)</div>
+          <select id="nCDuration">
+            <option value="">Select...</option>
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min (1 hr)</option>
+            <option value="90">90 min</option>
+            <option value="120">120 min (2 hrs)</option>
+          </select>
+        </div>
+      </div>
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">ICD-10 Code</div><input type="text" id="nCICD" placeholder="e.g. F84.0"/></div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">CPT Code</div><input type="text" id="nCCPT" placeholder="e.g. 97155"/></div>
+      </div>
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">2nd CPT</div><input type="text" id="nCCPT2" placeholder="optional"/></div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">3rd CPT</div><input type="text" id="nCCPT3" placeholder="optional"/></div>
+      </div>
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">4th CPT</div><input type="text" id="nCCPT4" placeholder="optional"/></div>
+        <div></div>
+      </div>
+
+      <!-- Custom authorization input -->
+      <div id="customAuthRow" style="display:none;margin-bottom:12px;">
+        <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Custom Authorization (e.g. 3x45)</div>
+        <input type="text" id="nCCustomAuth" placeholder="e.g. 3x45"/>
+      </div>
+
+      <div class="div"></div>
+      <div class="slabel">IFSP Functional Outcomes / Goals</div>
+      <div style="margin-bottom:8px;">
+        <textarea id="goalInp" rows="3"
+          style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:.86rem;font-family:var(--ui);resize:none;outline:none;background:#fff;color:var(--text);"
+          placeholder="Type one goal and tap Add, OR paste all goals at once (one per line) and tap Add All"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn-s" style="flex:1;" onclick="addGoal()">+ Add One</button>
+          <button class="btn-p" style="flex:1;padding:8px;" onclick="addAllGoals()">+ Add All (Paste)</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+        <button class="btn-s" style="font-size:.72rem;color:var(--primary);border-color:var(--primary);" onclick="splitExistingGoals()">🔧 Split Clumped Goals</button>
+      </div>
+      <div class="glist" id="goalList"><div style="font-size:.78rem;color:var(--muted);text-align:center;padding:8px;">No goals yet.</div></div>
+
+      <button class="btn-p" style="margin-top:14px;" onclick="saveChild()"><span id="saveCBtnTxt">Save Child Profile</span></button>
+      <div class="sbadge" id="cSaveBadge">✓ Saved!</div>
+
+      <div class="div"></div>
+      <div class="slabel">Saved Children</div>
+      <div id="childList"><div class="ibox">No children saved yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ══════════ PROFILE PAGE ══════════ -->
+  <div class="page" id="page-profile">
+    <div class="inner-pad">
+      <div class="slabel" style="margin-top:8px;">Provider / Interventionist</div>
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Full Name</div><input type="text" id="pName" placeholder="e.g. Maria Reyes"/></div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Credentials</div><input type="text" id="pCred" placeholder="e.g. MS CCC-SLP"/></div>
+      </div>
+      <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">NPI #</div><input type="text" id="pNPI" placeholder="10-digit NPI"/></div>
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">License / Cert #</div><input type="text" id="pLic" placeholder="License #"/></div>
+      </div>
+      <div class="g2 mb12">
+
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Service Type</div>
+          <select id="pType"><option value="">Select...</option><option>Speech-Language (ST)</option><option>Occupational Therapy (OT)</option><option>Physical Therapy (PT)</option><option>Special Education (SEIT)</option><option>Developmental Intervention (DI)</option><option>Special Instruction (SI)</option><option>ABA</option><option>Vision</option><option>Hearing</option><option>Nutrition</option><option>Psychology</option><option>Service Coordination</option></select>
+        </div>
+      </div>
+      <button class="btn-p" onclick="saveProfile()"><span>Save Profile</span></button>
+      <div class="sbadge" id="pSaveBadge">✓ Profile Saved!</div>
+    </div>
+  </div>
+
+
+  <!-- HISTORY PAGE -->
+  <div class="page" id="page-history">
+    <div class="inner-pad">
+      <div class="slabel" style="margin-top:8px;">Session Note History</div>
+      <div id="historyEmpty" class="ibox" style="margin-bottom:12px;">No notes saved yet. Complete a note in the Note tab to see it here.</div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- ATTENDANCE PAGE -->
+  <div class="page" id="page-attendance">
+    <div class="inner-pad">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;margin-bottom:12px;">
+        <div class="slabel" style="margin-bottom:0;">Attended Sessions</div>
+        <button class="btn-s" onclick="clearAttendance()" style="font-size:.68rem;">Clear All</button>
+      </div>
+      <div id="attendanceEmpty" class="ibox">No sessions logged yet. Complete Step 1 and generate a note to log attendance.</div>
+      <div id="attendanceList"></div>
+    </div>
+  </div>
+
+
+  <!-- SERVICE LOG PAGE -->
+  <div class="page" id="page-servicelog">
+    <div class="inner-pad">
+      <div class="slabel" style="margin-top:8px;">Service Log</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">NYC EI Program Service Log · 7/29/2024 · Parent signs each row after every session.</div>
+
+      <!-- Child selector for log view -->
+      <div class="slog-child-select">
+        <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">View Log For Child</div>
+        <select id="slogChildSel" onchange="renderServiceLog()" style="border:1px solid var(--border);border-radius:8px;padding:9px 10px;background:var(--white);">
+          <option value="">— Select Child —</option>
+        </select>
+      </div>
+
+      <!-- Child header (auto-filled) -->
+      <div id="slogHeader" style="display:none;" class="slog-header">
+        <div class="slog-header-row"><span class="slog-hk">Child's Name</span><span class="slog-hv" id="slogChildName">—</span></div>
+        <div class="slog-header-row"><span class="slog-hk">Date of Birth</span><span class="slog-hv" id="slogDOB">—</span></div>
+        <div class="slog-header-row"><span class="slog-hk">Child's EI #</span><span class="slog-hv" id="slogEI">—</span></div>
+        <div class="slog-header-row"><span class="slog-hk">Service Type</span><span class="slog-hv" id="slogServType">—</span></div>
+        <div class="slog-header-row"><span class="slog-hk">Service Authorization #</span><span class="slog-hv" id="slogAuth">—</span></div>
+        <div class="slog-header-row"><span class="slog-hk">Interventionist</span><span class="slog-hv" id="slogProvider">—</span></div>
+        <div class="slog-header-row"><span class="slog-hk">Discipline / NPI #</span><span class="slog-hv" id="slogNPI">—</span></div>
+
+      </div>
+
+      <!-- Stats -->
+      <div class="slog-stats" id="slogStats" style="display:none;">
+        <div class="slog-stat"><div class="slog-stat-num" id="slogTotalSessions">0</div><div class="slog-stat-lbl">Sessions</div></div>
+        <div class="slog-stat"><div class="slog-stat-num" id="slogSignedCount">0</div><div class="slog-stat-lbl">Signed</div></div>
+        <div class="slog-stat"><div class="slog-stat-num" id="slogUnsignedCount">0</div><div class="slog-stat-lbl">Pending</div></div>
+      </div>
+
+      <!-- Export button -->
+      <button class="slog-export-btn" id="slogExportBtn" onclick="exportServiceLog()" style="display:none;">📄 Export Log as Text</button>
+
+      <!-- Log rows -->
+      <div id="slogEmpty" class="ibox">Select a child to view their service log. Sessions auto-populate here after each completed note.</div>
+      <div id="slogRows"></div>
+    </div>
+  </div>
+
+</div><!-- end app -->
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────
+let profile = JSON.parse(localStorage.getItem('ei_p4')||'{}');
+let children = JSON.parse(localStorage.getItem('ei_c4')||'[]');
+
+// ── MIGRATE OLD DATA ──────────────────────────────────────────
+(function migrateLegacyData(){
+  // Migrate children from older versions (v3, v2, v1)
+  var oldKeys = ['ei_children_v3','ei_children','ei_c3'];
+  oldKeys.forEach(function(key){
+    var old = JSON.parse(localStorage.getItem(key)||'[]');
+    if(old.length && !children.length){
+      children = old;
+      localStorage.setItem('ei_c4', JSON.stringify(children));
+      console.log('Migrated ' + old.length + ' children from ' + key);
+    }
+  });
+  // Migrate profile from older versions
+  var oldPKeys = ['ei_profile_v3','ei_profile','ei_p3'];
+  oldPKeys.forEach(function(key){
+    var old = JSON.parse(localStorage.getItem(key)||'{}');
+    if(old.name && !profile.name){
+      profile = old;
+      localStorage.setItem('ei_p4', JSON.stringify(profile));
+      console.log('Migrated profile from ' + key);
+    }
+  });
+})();
+let tempGoals = [];
+let editIdx = null;
+let currentStep = 1;
+const TOTAL_STEPS = 7;
+const stepTitles = ['Session Attendance','Session Coding','Session Results','Caregiver Details','Review & Edit Note','Service Log Signature','Provider Signature'];
+
+// ── INIT ──────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function(){
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('sessDate').value = today;
+  // Real-time time validation — fires on both time fields
+  function validateTimes(){
+    var tf = document.getElementById('timeFrom').value;
+    var tt = document.getElementById('timeTo').value;
+    var errEl = document.getElementById('step1Error');
+    var nextBtn = document.getElementById('nextBtn');
+    if(!tf || !tt) return; // both must be filled first
+    var from = new Date('1970-01-01T'+tf);
+    var to = new Date('1970-01-01T'+tt);
+    var diffMins = Math.round((to - from) / 60000);
+    // Check 1: Time To must be after Time From
+    if(to <= from){
+      errEl.textContent = '⚠️ Time To (' + tt + ') must be after Time From (' + tf + '). Please fix the session time.';
+      errEl.style.display = 'block';
+      nextBtn.disabled = true;
+      nextBtn.style.opacity = '0.4';
+      return;
+    }
+    // Check 2: Duration must match authorized duration (within 1 minute tolerance)
+    var childSel = document.getElementById('childSel');
+    var authDur = parseInt(childSel.dataset.duration || '0');
+    if(authDur > 0){
+      if(Math.abs(diffMins - authDur) > 1){
+        errEl.textContent = '⚠️ Session is ' + diffMins + ' min but this child is authorized for ' + authDur + ' min. Please correct the time to match exactly.';
+        errEl.style.display = 'block';
+        nextBtn.disabled = true;
+        nextBtn.style.opacity = '0.4';
+        return;
+      }
+    }
+    // All good
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+    nextBtn.disabled = false;
+    nextBtn.style.opacity = '1';
+  }
+  document.getElementById('timeTo').addEventListener('change', validateTimes);
+  document.getElementById('timeFrom').addEventListener('change', validateTimes);
+  if(document.getElementById('slogParentSigDate')) document.getElementById('slogParentSigDate').value = today;
+  loadProfileForm();
+  renderChildSel();
+  renderChildList();
+  updateStepUI();
+  checkHipaa();
+  renderHistory();
+  renderAttendance();
+});
+
+// ── HIPAA ─────────────────────────────────────────────────────
+function onHipaaCheck(){
+  var chk = document.getElementById('hipaaChk');
+  var btn = document.getElementById('hipaaContinueBtn');
+  btn.disabled = !chk.checked;
+  if(chk.checked) btn.classList.add('ready'); else btn.classList.remove('ready');
+}
+function acceptHipaa(){
+  localStorage.setItem('ei_hipaa_accepted','true');
+  document.getElementById('hipaaGate').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'block';
+}
+function checkHipaa(){
+  if(localStorage.getItem('ei_hipaa_accepted') === 'true'){
+    document.getElementById('hipaaGate').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+  }
+}
+
+// ── PAGE SWITCH ───────────────────────────────────────────────
+function showPage(page, el){
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.nav-strip-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.getElementById('page-'+page).classList.add('active');
+  el.classList.add('active');
+  if(page === 'servicelog'){ renderSlogChildSel(); renderServiceLog(); }
+}
+
+// ── STEP NAV ──────────────────────────────────────────────────
+function showError(id, msg){
+  var el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  el.scrollIntoView({behavior:'smooth', block:'center'});
+  setTimeout(function(){ el.classList.remove('show'); }, 4000);
+}
+function clearError(id){
+  var el = document.getElementById(id);
+  if(el){ el.classList.remove('show'); el.textContent=''; }
+}
+
+function validateStep(step){
+  if(step === 1){
+    // Must select a child
+    var childIdx = document.getElementById('childSel').value;
+    if(!childIdx){ showError('step1Error', '⚠️ Please select a child before continuing.'); return false; }
+    // Time validation
+    var tf = document.getElementById('timeFrom').value;
+    var tt = document.getElementById('timeTo').value;
+    if(tf && tt){
+      var from = new Date('1970-01-01T'+tf);
+      var to = new Date('1970-01-01T'+tt);
+      if(to <= from){
+        showError('step1Error', '⚠️ Time To must be after Time From. Please fix the session time.');
+        document.getElementById('timeTo').classList.add('field-error');
+        return false;
+      }
+    }
+    // Duration check
+    if(tf && tt){
+      var from2 = new Date('1970-01-01T'+tf);
+      var to2 = new Date('1970-01-01T'+tt);
+      var diffMins = Math.round((to2 - from2) / 60000);
+      var authDur = parseInt(document.getElementById('childSel').dataset.duration || '0');
+      if(authDur > 0 && Math.abs(diffMins - authDur) > 1){
+        showError('step1Error', '⚠️ Session is ' + diffMins + ' min but authorized for ' + authDur + ' min. Please correct before continuing.');
+        document.getElementById('nextBtn').disabled = true;
+        document.getElementById('nextBtn').style.opacity = '0.4';
+        return false;
+      }
+    }
+    document.getElementById('timeTo').classList.remove('field-error');
+    clearError('step1Error');
+    return true;
+  }
+  if(step === 5){
+    var outSec = document.getElementById('outSec');
+    if(!outSec || outSec.style.display === 'none'){
+      showError('step5Error', '⚠️ Please tap Generate and then Submit before continuing.');
+      return false;
+    }
+    var submitBtn = document.getElementById('submitNoteBtn');
+    if(submitBtn && submitBtn.style.display !== 'none' && submitBtn.innerHTML.indexOf('Submit') > -1){
+      showError('step5Error', '⚠️ Please tap Submit & Save Note before continuing.');
+      return false;
+    }
+    clearError('step5Error');
+    return true;
+  }
+  if(step === 6){
+    // Must have parent signature drawn
+    if(isCanvasEmpty('parentSigCanvas')){
+      showError('step6Error', '⚠️ Signature required. Parent/Caregiver must sign before continuing.');
+      return false;
+    }
+    // Must confirm signature saved
+    var success = document.getElementById('slogSigSuccess');
+    if(!success || success.style.display === 'none'){
+      // Check if it was already saved by looking at localStorage
+      var idx = document.getElementById('childSel').value;
+      var child = idx !== '' ? children[parseInt(idx)] : null;
+      if(child){
+        var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+        var childNote = null;
+        for(var i=0;i<allNotes.length;i++){ if(allNotes[i].childName===child.name && allNotes[i].sessDate===g('sessDate')){ childNote=allNotes[i]; break; } }
+        if(childNote){
+          var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+          var childSlog = slogData[child.name]||{};
+          if(childSlog[childNote.id] && childSlog[childNote.id].signed) return true;
+        }
+      }
+      showError('step6Error', '⚠️ Please tap Confirm & Save to Service Log after signing.');
+      return false;
+    }
+    clearError('step6Error');
+    return true;
+  }
+  return true;
+}
+
+function nextStep(){
+  if(!validateStep(currentStep)) return;
+  if(currentStep < TOTAL_STEPS){ currentStep++; updateStepUI(); window.scrollTo(0,0); }
+}
+function prevStep(){ if(currentStep > 1){ currentStep--; updateStepUI(); window.scrollTo(0,0); } }
+function resetNote(){ currentStep = 1; updateStepUI(); }
+
+function updateStepUI(){
+  document.querySelectorAll('.step-page').forEach(function(p,i){ p.classList.toggle('active', i === currentStep-1); });
+  document.getElementById('stepLabel').textContent = 'Step ' + currentStep + ' of ' + TOTAL_STEPS;
+  document.getElementById('stepTitle').textContent = stepTitles[currentStep-1];
+  var segs = document.querySelectorAll('.progress-seg');
+  segs.forEach(function(s,i){
+    s.classList.remove('done','active');
+    if(i < currentStep-1) s.classList.add('done');
+    else if(i === currentStep-1) s.classList.add('active');
+  });
+  document.getElementById('backBtn').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+  document.getElementById('nextBtn').style.display = currentStep === TOTAL_STEPS ? 'none' : 'flex';
+  if(currentStep === 6){ fillStep6(); setTimeout(function(){ initCanvas('parentSigCanvas'); initCanvas('providerSigCanvasStep6'); }, 150); }
+  if(currentStep === 7){
+    var idx = document.getElementById('childSel').value;
+    var child = idx !== '' ? children[parseInt(idx)] : null;
+    var completeSigChild = document.getElementById('completeSigChild');
+    var completeSigDate = document.getElementById('completeSigDate');
+    if(completeSigChild) completeSigChild.textContent = child ? child.name : '—';
+    if(completeSigDate) completeSigDate.textContent = g('sessDate')||'—';
+  }
+}
+
+// ── CHECKBOX TOGGLE ────────────────────────────────────────────
+function toggleChk(el){
+  var box = el.querySelector('.chk-box');
+  box.classList.toggle('on');
+}
+function getChecked(containerId){
+  var items = document.querySelectorAll('#'+containerId+' .chk-item');
+  var result = [];
+  items.forEach(function(el){
+    if(el.querySelector('.chk-box').classList.contains('on')) result.push(el.dataset.val || el.textContent.trim());
+  });
+  return result;
+}
+
+// ── PROFILE ───────────────────────────────────────────────────
+function saveProfile(){
+  profile = { name:g('pName'), cred:g('pCred'), npi:g('pNPI'), lic:g('pLic'), agency:g('pAgency'), progId:g('pProgID'), type:g('pType') };
+  localStorage.setItem('ei_p4', JSON.stringify(profile));
+  showBadge('pSaveBadge');
+}
+function loadProfileForm(){
+  if(!profile.name) return;
+  s('pName',profile.name); s('pCred',profile.cred); s('pNPI',profile.npi);
+  s('pLic',profile.lic); s('pAgency',profile.agency); s('pProgID',profile.progId); s('pType',profile.type);
+}
+
+// ── CHILDREN ─────────────────────────────────────────────────
+function addGoal(){
+  var inp = document.getElementById('goalInp');
+  var val = inp.value.trim(); if(!val) return;
+  tempGoals.push(val); inp.value = ''; renderTempGoals();
+}
+
+function repairChildGoals(child){
+  // If any goal contains newlines or numbered patterns, split it
+  var fixed = [];
+  (child.goals||[]).forEach(function(goal){
+    var lines = goal.split('\n');
+    if(lines.length > 1){
+      lines.forEach(function(line){
+        var cleaned = stripNumPrefix(line);
+        if(cleaned.length > 3) fixed.push(cleaned);
+      });
+    } else {
+      // check for inline numbering like "2. Will..."
+      var parts = goal.split(/(?=\s\d+\.\s)/);
+      if(parts.length > 1){
+        parts.forEach(function(part){
+          var cleaned = stripNumPrefix(part.trim());
+          if(cleaned.length > 3) fixed.push(cleaned);
+        });
+      } else {
+        if(goal.trim().length > 3) fixed.push(goal.trim());
+      }
+    }
+  });
+  child.goals = fixed;
+  return child;
+}
+
+function stripNumPrefix(str){
+  var s = str.trim();
+  s = s.replace(/^\d+\.\s*/, '');
+  return s.trim();
+}
+
+function splitExistingGoals(){
+  // Split any clumped goals into individual ones
+  var newGoals = [];
+  tempGoals.forEach(function(goal){
+    // Try splitting by newline first
+    var lines = goal.split('\n');
+    if(lines.length > 1){
+      lines.forEach(function(line){
+        var cleaned = stripNumPrefix(line);
+        if(cleaned.length > 3) newGoals.push(cleaned);
+      });
+    } else {
+      // Try splitting by number patterns like "2." "3." in the middle of text
+      var parts = goal.split(/(?=\s\d+\.\s)/);
+      if(parts.length > 1){
+        parts.forEach(function(part){
+          var cleaned = stripNumPrefix(part);
+          if(cleaned.length > 3) newGoals.push(cleaned);
+        });
+      } else {
+        // Try splitting by dash or bullet
+        var dparts = goal.split(/\n?[-•]\s+/);
+        if(dparts.length > 1){
+          dparts.forEach(function(part){
+            var cleaned = part.trim();
+            if(cleaned.length > 3) newGoals.push(cleaned);
+          });
+        } else {
+          newGoals.push(goal);
+        }
+      }
+    }
+  });
+  tempGoals = newGoals;
+  renderTempGoals();
+  alert('Goals split into ' + tempGoals.length + ' individual items. Review and save.');
+}
+
+function addAllGoals(){
+  var inp = document.getElementById('goalInp');
+  var raw = inp.value.trim(); if(!raw) return;
+  var lines = raw.split('\n');
+  var added = 0;
+  lines.forEach(function(line){
+    var cleaned = stripNumPrefix(line);
+    if(cleaned.length > 3){ tempGoals.push(cleaned); added++; }
+  });
+  if(added === 0){
+    var parts = raw.split('. ');
+    parts.forEach(function(part){
+      var cleaned = stripNumPrefix(part);
+      if(cleaned.length > 3) tempGoals.push(cleaned);
+    });
+  }
+  inp.value = ''; renderTempGoals();
+}
+
+function renderTempGoals(){
+  var el = document.getElementById('goalList');
+  if(!tempGoals.length){ el.innerHTML = '<div style="font-size:.78rem;color:var(--muted);text-align:center;padding:8px;">No goals yet.</div>'; return; }
+  var html = '';
+  tempGoals.forEach(function(goal, i){
+    html += '<div class="gi"><span class="gi-t">'+goal+'</span><button class="gi-x" onclick="removeGoal('+i+')">×</button></div>';
+  });
+  el.innerHTML = html;
+}
+function removeGoal(i){ tempGoals.splice(i,1); renderTempGoals(); }
+
+function saveChild(){
+  var name = g('nCName'); if(!name) return alert("Please enter child's name.");
+  var child = {
+    name:name, dob:g('nCDOB'), sex:g('nCSex'), ei:g('nCEI'), auth:g('nCAuth'),
+    servType:g('nCServType'), approach:g('nCApproach'), authCode:getAuthCode(), duration:getSessionDuration(), icd:g('nCICD'),
+    cpt:g('nCCPT'), cpt2:g('nCCPT2'), cpt3:g('nCCPT3'), cpt4:g('nCCPT4'), goals:[].concat(tempGoals)
+  };
+  if(editIdx !== null){ children[editIdx] = child; editIdx = null; document.getElementById('saveCBtnTxt').textContent='Save Child Profile'; document.getElementById('childFormLbl').textContent='Add New Child'; }
+  else children.push(child);
+  localStorage.setItem('ei_c4', JSON.stringify(children));
+  clearChildForm(); renderChildList(); renderChildSel(); showBadge('cSaveBadge');
+  window.scrollTo({top: document.getElementById('childList').offsetTop - 20, behavior:'smooth'});
+}
+function clearChildForm(){
+  ['nCName','nCDOB','nCSex','nCEI','nCAuth','nCServType','nCApproach','nCDuration','nCCustomAuth','nCICD','nCCPT','nCCPT2','nCCPT3','nCCPT4'].forEach(function(id){
+    var e = document.getElementById(id); if(e) e.value = '';
+  });
+  tempGoals = []; renderTempGoals();
+}
+function editChild(i){
+  var c = children[i]; editIdx = i;
+  s('nCName',c.name); s('nCDOB',c.dob); s('nCSex',c.sex); s('nCEI',c.ei); s('nCAuth',c.auth);
+  s('nCServType',c.servType); s('nCApproach',c.approach); s('nCDuration',c.authCode||c.duration); s('nCICD',c.icd); updateAuthDisplay();
+  s('nCCPT',c.cpt); s('nCCPT2',c.cpt2); s('nCCPT3',c.cpt3); s('nCCPT4',c.cpt4);
+  c = repairChildGoals(c); tempGoals = [].concat(c.goals||[]); renderTempGoals();
+  document.getElementById('childFormLbl').textContent = 'Editing: '+c.name;
+  document.getElementById('saveCBtnTxt').textContent = 'Update Child Profile';
+  showPage('children', document.querySelectorAll('.nav-strip-tab')[1]);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function deleteChild(i){
+  if(!confirm('Delete '+children[i].name+'?')) return;
+  children.splice(i,1); localStorage.setItem('ei_c4',JSON.stringify(children));
+  renderChildList(); renderChildSel();
+}
+function renderChildList(){
+  var el = document.getElementById('childList');
+  if(!children.length){ el.innerHTML = '<div class="ibox">No children saved yet.</div>'; return; }
+  var html = '';
+  children.forEach(function(c,i){
+    html += '<div class="ccard">'
+      + '<div><div class="cname">'+c.name+'</div>'
+      + '<div class="cmeta">'+(c.servType||'No service')+(c.approach?' · '+c.approach:'')+(c.authCode?' · Auth: '+c.authCode:'')+' · ICD: '+(c.icd||'—')+'</div></div>'
+      + '<div class="cacts"><button class="btn-s" onclick="editChild('+i+')">Edit</button>'
+      + '<button class="btn-d" onclick="deleteChild('+i+')">✕</button></div>'
+      + '</div>';
+  });
+  el.innerHTML = html;
+}
+function renderChildSel(){
+  var sel = document.getElementById('childSel');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— Select Child —</option>';
+  children.forEach(function(c,i){
+    var o = document.createElement('option'); o.value = i; o.textContent = c.name; sel.appendChild(o);
+  });
+  if(cur !== '') sel.value = cur;
+  renderSlogChildSel();
+}
+
+function onChildChange(){
+  var idx = document.getElementById('childSel').value;
+  var warn = document.getElementById('noChildWarn');
+  var prev = document.getElementById('childHdrPreview');
+  if(idx === ''){
+    if(warn) warn.style.display = 'inline';
+    if(prev) prev.style.display = 'none';
+    document.getElementById('goalsList').innerHTML = '<div class="ibox">Select a child in Step 1 to load their IFSP goals.</div>';
+    // caregiverAgreedList removed
+    var ca = document.getElementById('codingAutofill'); if(ca) ca.style.display = 'none';
+    return;
+  }
+  if(warn) warn.style.display = 'none';
+  var c = children[parseInt(idx)];
+  if(c.icd) s('icdCode',c.icd);
+  if(c.cpt) s('cptCode',c.cpt);
+  if(c.cpt2) s('cptCode2',c.cpt2);
+  if(c.cpt3) s('cptCode3',c.cpt3);
+  if(c.cpt4) s('cptCode4',c.cpt4);
+  document.getElementById('childSel').dataset.duration = c.duration||'';
+  document.getElementById('childSel').dataset.authCode = c.authCode||'';
+  document.getElementById('childSel').dataset.frequency = c.frequency||'';
+  document.getElementById('childSel').dataset.sessionsPerDay = c.sessionsPerDay||'';
+  var autofill = document.getElementById('codingAutofill');
+  if(autofill){
+    autofill.style.display = 'block';
+    autofill.innerHTML = '<div class="prow"><span class="pk">Child</span><span class="pv">'+c.name+'</span></div>'
+      + (c.servType ? '<div class="prow"><span class="pk">Service</span><span class="pv">'+c.servType+'</span></div>' : '')
+      + (c.icd ? '<div class="prow"><span class="pk">ICD-10</span><span class="pv">'+c.icd+'</span></div>' : '')
+      + (c.cpt ? '<div class="prow"><span class="pk">CPT</span><span class="pv">'+c.cpt+'</span></div>' : '');
+  }
+  c = repairChildGoals(c); renderGoalTags(c.goals || []);
+}
+
+function renderGoalTags(goals){
+  var gEl = document.getElementById('goalsList');
+  if(!goals.length){
+    gEl.innerHTML = '<div class="ibox">No IFSP goals saved for this child. Go to Children tab to add them.</div>';
+    return;
+  }
+  var gHtml = '<div class="goal-chk-list" style="max-height:320px;overflow-y:auto;">';
+  goals.forEach(function(goal, i){
+    gHtml += '<div class="goal-chk-item" onclick="onGoalClick(this)" data-idx="'+i+'" data-val="'+goal+'">'
+      + '<div class="chk-box"></div><span class="goal-chk-label">'+goal+'</span></div>';
+  });
+  gEl.innerHTML = gHtml + '</div>';
+}
+function onGoalClick(el){
+  var box = el.querySelector('.chk-box');
+  box.classList.toggle('on');
+  var idx = el.dataset.idx;
+
+}
+function toggleGoalChk(el){ el.querySelector('.chk-box').classList.toggle('on'); }
+
+// ── GENERATE ──────────────────────────────────────────────────
+async function generateNote(){
+  var rawNotes = g('rawNotes');
+  if(!rawNotes) return alert('Please enter session notes in Step 3 first.');
+
+  var idx = document.getElementById('childSel').value;
+  var child = idx !== '' ? children[parseInt(idx)] : null;
+  var cName = child ? child.name : 'the child';
+
+  var sessDate = g('sessDate'), timeFrom = g('timeFrom'), timeTo = g('timeTo');
+  var servLoc = g('servLoc'), sessDelivered = g('sessDelivered');
+  var attendStatus = g('attendStatus');
+  var icd = g('icdCode'), cpt = g('cptCode');
+
+  var participants = getChecked('step1');
+  var otherPart = g('otherParticipants');
+  var coaching = getChecked('coachingList');
+  var otherCollab = g('otherCollab'); if(otherCollab) coaching.push(otherCollab);
+
+  var selGoals = [];
+  document.querySelectorAll('#goalsList .goal-chk-item').forEach(function(el){
+    if(el.querySelector('.chk-box').classList.contains('on')) selGoals.push(el.dataset.val);
+  });
+  var careGoals = [];
+
+  // Build header
+  var hdrParts = [
+    'Child: ' + (child ? child.name : '—'),
+    child && child.dob ? 'DOB: '+child.dob : '',
+    child && child.sex ? 'Sex: '+child.sex : '',
+    child && child.ei ? 'EI #: '+child.ei : '',
+    child && child.auth ? 'Auth #: '+child.auth : '',
+    'Interventionist: '+(profile.name||'—')+(profile.cred ? ', '+profile.cred : ''),
+    profile.npi ? 'NPI: '+profile.npi : '',
+    profile.progId ? 'Program ID: '+profile.progId : '',
+    child && child.servType ? 'Service Type: '+child.servType : '',
+    child && child.approach ? 'Approach: '+child.approach : '',
+    child && child.authCode ? 'Authorization: '+child.authCode : '',
+    child && child.progId ? 'Program ID: '+child.progId : '',
+    sessDate ? 'Session Date: '+sessDate : '',
+    (timeFrom && timeTo) ? 'Time: '+timeFrom+' - '+timeTo : '',
+    servLoc ? 'IFSP Service Location: '+servLoc : '',
+    sessDelivered ? 'Session Delivered: '+sessDelivered : '',
+    g('intensity') ? 'Intensity: '+g('intensity') : '',
+    attendStatus ? 'Attendance: '+attendStatus : '',
+    icd ? 'ICD-10: '+icd : '',
+    cpt ? 'CPT: '+cpt : '',
+    g('cptCode2') ? 'CPT 2: '+g('cptCode2') : '',
+    g('cptCode3') ? 'CPT 3: '+g('cptCode3') : '',
+    g('cptCode4') ? 'CPT 4: '+g('cptCode4') : '',
+    participants.length ? 'Participants: '+participants.concat(otherPart ? [otherPart] : []).join(', ') : '',
+    'License/Certification #: CERTIFIED',
+    'Supervising Clinician (if applicable): N/A',
+    'Supervising Clinician License/Certification #: N/A'
+  ].filter(Boolean).join('\n');
+
+  window._currentHdr = hdrParts;
+
+  // Section 5
+  var sec5 = g('caregiverAgreedText') || "Parent/Caregiver agreed to continue reinforcing targeted developmental skills within daily routines between visits as collaboratively discussed during this session.";
+
+  var btn = document.getElementById('genBtn');
+  btn.disabled = true; btn.innerHTML = '<div class="spin"></div><span>Generating...</span>';
+  document.getElementById('outSec').style.display = 'block';
+  document.getElementById('eBox').style.display = 'none';
+  document.getElementById('oHdrDisplay').innerText = hdrParts;
+  document.getElementById('oSec5').value = sec5;
+  document.getElementById('oGoals').value = selGoals.length ? selGoals.map(function(goal,i){ return (i+1)+'. '+goal; }).join('\n') : 'No goals selected.';
+  document.getElementById('oCoaching').value = coaching.length ? coaching.join('\n') : 'No coaching methods selected.';
+  document.getElementById('oNarrative').value = 'Generating...';
+
+  var prompt = 'You are an NYC Early Intervention therapist. Write EXACTLY 2-3 short clinical sentences for a session note. Be brief and direct like a therapist writing in ProviderSoft. CHILD: '+cName+'. SERVICE: '+(child&&child.servType?child.servType:'EI')+'. GOALS: '+(selGoals.length?selGoals.join('; '):'General goals')+'. SESSION NOTES: '+rawNotes+'. Write 2-3 sentences only covering: activity done, strategy used, child response. Use child first name only. No bullet points. No markdown. Very brief.';
+
+  try {
+    var res = await fetch('/.netlify/functions/claude', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1000, messages:[{role:'user',content:prompt}] })
+    });
+    var data = await res.json();
+    if(data.error){
+      document.getElementById('eBox').style.display = 'block';
+      document.getElementById('eBox').innerText = 'API Error: ' + data.error.message;
+      document.getElementById('oNarrative').value = '';
+    } else if(data.content && data.content.length > 0){
+      var txt = data.content.map(function(b){ return b.text||''; }).join('');
+      document.getElementById('oNarrative').value = txt.trim();
+    } else {
+      document.getElementById('eBox').style.display = 'block';
+      document.getElementById('eBox').innerText = 'Unexpected response: ' + JSON.stringify(data).substring(0,200);
+      document.getElementById('oNarrative').value = '';
+    }
+  } catch(err) {
+    document.getElementById('eBox').style.display = 'block';
+    document.getElementById('eBox').innerText = 'Network error: '+err.message;
+    document.getElementById('oNarrative').value = '';
+  }
+  btn.disabled = false; btn.innerHTML = '<span>Regenerate Note</span>';
+}
+
+// ── SUBMIT NOTE ───────────────────────────────────────────────
+function submitNote(){
+  var narrative = document.getElementById('oNarrative').value.trim();
+  if(!narrative || narrative === 'Generating...') return alert('Please generate the note first.');
+  var idx2 = document.getElementById('childSel').value;
+  var child2 = idx2 !== '' ? children[parseInt(idx2)] : null;
+  saveNoteToHistory(
+    child2 ? child2.name : 'Unknown',
+    g('sessDate'),
+    child2 ? child2.servType || profile.type || 'EI' : 'EI',
+    g('attendStatus'),
+    narrative,
+    document.getElementById('oGoals').value,
+    document.getElementById('oCoaching').value,
+    document.getElementById('oSec5').value,
+    window._currentHdr || ''
+  );
+  document.getElementById('submitNoteBtn').style.display = 'none';
+  document.getElementById('submitSuccess').style.display = 'block';
+  setTimeout(function(){
+    document.getElementById('submitNoteBtn').style.display = 'flex';
+    document.getElementById('submitSuccess').style.display = 'none';
+    document.getElementById('submitNoteBtn').innerHTML = '<span>Submitted — Generate New Note</span>';
+  }, 3000);
+}
+
+// ── HISTORY ───────────────────────────────────────────────────
+function saveNoteToHistory(childName, sessDate, servType, attendStatus, narrative, goals, coaching, sec5, header){
+  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var note = { id:Date.now(), childName:childName, sessDate:sessDate, servType:servType,
+    attendStatus:attendStatus, narrative:narrative, goals:goals, coaching:coaching,
+    sec5:sec5, header:header, savedAt:new Date().toLocaleString() };
+  notes.unshift(note);
+  localStorage.setItem('ei_notes_v4', JSON.stringify(notes));
+  saveAttendanceRecord(childName, sessDate, servType, attendStatus);
+  renderHistory();
+  renderAttendance();
+}
+
+function renderHistory(){
+  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var list = document.getElementById('historyList');
+  var empty = document.getElementById('historyEmpty');
+  if(!list) return;
+  if(!notes.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  var html = '';
+  notes.forEach(function(n){
+    html += '<div class="note-card" onclick="toggleNoteDetail(\'nd-'+n.id+'\')">'
+      + '<div class="note-card-top"><div class="note-card-name">'+n.childName+'</div><div class="note-card-date">'+n.sessDate+'</div></div>'
+      + '<div class="note-card-meta">'+(n.servType||'—')+' · '+(n.attendStatus||'Attended')+'</div>'
+      + '<div class="note-card-preview">'+(n.narrative||'No narrative generated.')+'</div>'
+      + '<div class="note-detail" id="nd-'+n.id+'">'
+        + buildBlock('Header', n.header)
+        + buildBlock('Session Narrative', n.narrative)
+        + buildBlock('IFSP Goals Addressed', n.goals)
+        + buildBlock('Caregiver Coaching', n.coaching)
+        + buildBlock('Caregiver Agreed Strategies', n.sec5)
+        + '<div style="font-size:.68rem;color:var(--muted);font-family:var(--mono);">Saved: '+n.savedAt+'</div>'
+        + '<button class="btn-d" style="margin-top:8px;width:100%;" onclick="deleteNote('+n.id+',event)">Delete Note</button>'
+      + '</div>'
+    + '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function buildBlock(title, content){
+  if(!content) return '';
+  var safe = content.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return '<div style="margin-bottom:10px;">'
+    + '<div style="font-family:var(--mono);font-size:.64rem;color:var(--primary);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">'+title+'</div>'
+    + '<div style="font-size:.82rem;line-height:1.6;white-space:pre-wrap;color:var(--text);">'+safe+'</div>'
+    + '</div>';
+}
+
+function toggleNoteDetail(id){ var el=document.getElementById(id); if(el) el.classList.toggle('open'); }
+
+function deleteNote(id, e){
+  e.stopPropagation();
+  if(!confirm('Delete this note?')) return;
+  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  notes = notes.filter(function(n){ return n.id !== id; });
+  localStorage.setItem('ei_notes_v4', JSON.stringify(notes));
+  renderHistory();
+}
+
+// ── ATTENDANCE ────────────────────────────────────────────────
+function saveAttendanceRecord(childName, sessDate, servType, attendStatus){
+  var att = JSON.parse(localStorage.getItem('ei_att_v4')||'[]');
+  att.unshift({id:Date.now(), childName:childName, sessDate:sessDate, servType:servType, attendStatus:attendStatus||'Attended'});
+  localStorage.setItem('ei_att_v4', JSON.stringify(att));
+}
+function renderAttendance(){
+  var att = JSON.parse(localStorage.getItem('ei_att_v4')||'[]');
+  var list = document.getElementById('attendanceList');
+  var empty = document.getElementById('attendanceEmpty');
+  if(!list) return;
+  if(!att.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  var html = '';
+  att.forEach(function(a){
+    var sc = a.attendStatus === 'Attended' ? 'attended' : a.attendStatus.indexOf('Cancel') > -1 ? 'cancelled' : 'makeup';
+    html += '<div class="att-card">'
+      + '<div class="att-card-left"><div class="att-name">'+a.childName+'</div>'
+      + '<div class="att-meta">'+a.sessDate+' · '+(a.servType||'—')+'</div></div>'
+      + '<div class="att-status '+sc+'">'+a.attendStatus+'</div>'
+      + '</div>';
+  });
+  list.innerHTML = html;
+}
+function clearAttendance(){
+  if(!confirm('Clear all attendance records?')) return;
+  localStorage.removeItem('ei_att_v4'); renderAttendance();
+}
+
+// ── SERVICE LOG ───────────────────────────────────────────────
+function renderSlogChildSel(){
+  var sel = document.getElementById('slogChildSel');
+  if(!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— Select Child —</option>';
+  children.forEach(function(c,i){
+    var o = document.createElement('option'); o.value = i; o.textContent = c.name; sel.appendChild(o);
+  });
+  if(cur !== '') sel.value = cur;
+}
+function renderServiceLog(){
+  var idx = document.getElementById('slogChildSel').value;
+  var hdr = document.getElementById('slogHeader');
+  var stats = document.getElementById('slogStats');
+  var exportBtn = document.getElementById('slogExportBtn');
+  var empty = document.getElementById('slogEmpty');
+  var rows = document.getElementById('slogRows');
+  if(idx === ''){ hdr.style.display='none'; stats.style.display='none'; exportBtn.style.display='none'; empty.style.display='block'; rows.innerHTML=''; return; }
+  var c = children[parseInt(idx)], p = profile;
+  hdr.style.display='block';
+  document.getElementById('slogChildName').textContent = c.name||'—';
+  document.getElementById('slogDOB').textContent = c.dob||'—';
+  document.getElementById('slogEI').textContent = c.ei||'—';
+  document.getElementById('slogServType').textContent = c.servType||'—';
+  document.getElementById('slogAuth').textContent = c.auth||'—';
+  document.getElementById('slogProvider').textContent = (p.name||'—')+(p.cred?', '+p.cred:'');
+  document.getElementById('slogNPI').textContent = (c.servType||p.type||'—')+(p.npi?' · NPI: '+p.npi:'');
+  document.getElementById('slogProvider').textContent = p.name ? (p.name+(p.cred?', '+p.cred:'')) : '— (Set in Profile tab)';
+  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var childNotes = allNotes.filter(function(n){ return n.childName === c.name; }).sort(function(a,b){ return new Date(a.sessDate)-new Date(b.sessDate); });
+  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var childSlog = slogData[c.name]||{};
+  if(!childNotes.length){ stats.style.display='none'; exportBtn.style.display='none'; empty.style.display='block'; rows.innerHTML=''; return; }
+  empty.style.display='none'; stats.style.display='flex'; exportBtn.style.display='block';
+  var signed = childNotes.filter(function(n){ return childSlog[n.id] && childSlog[n.id].signed; }).length;
+  document.getElementById('slogTotalSessions').textContent = childNotes.length;
+  document.getElementById('slogSignedCount').textContent = signed;
+  document.getElementById('slogUnsignedCount').textContent = childNotes.length - signed;
+  var html = '';
+  childNotes.forEach(function(n, rowIdx){
+    var sig = childSlog[n.id]||{};
+    var isSigned = sig.signed;
+    var timeMatch = n.header.match(/Time: ([^\n]+)/);
+    var deliveryMatch = n.header.match(/Session Delivered: ([^\n]+)/);
+    var cptMatch = n.header.match(/CPT: ([^\n]+)/);
+    var timeStr = timeMatch ? timeMatch[1] : '—';
+    var delivery = deliveryMatch ? deliveryMatch[1] : '—';
+    var cpt = cptMatch ? cptMatch[1] : '—';
+    var dc = delivery.indexOf('Telehealth') > -1 ? 'T' : 'I';
+    html += '<div class="slog-row">'
+      + '<div class="slog-row-top"><div><div class="slog-row-date">'+n.sessDate+'</div><div class="slog-row-meta">Row '+(rowIdx+1)+'</div></div>'
+      + (isSigned ? '<div class="slog-signed-badge">Signed</div>' : '<div class="slog-unsigned-badge">Pending</div>')
+      + '</div>'
+      + '<div class="slog-row-fields">'
+      + '<div class="slog-field"><div class="slog-field-label">Time</div><div class="slog-field-val">'+timeStr+'</div></div>'
+      + '<div class="slog-field"><div class="slog-field-label">Delivery</div><div class="slog-field-val">'+dc+' ('+delivery+')</div></div>'
+      + '<div class="slog-field"><div class="slog-field-label">CPT</div><div class="slog-field-val">'+cpt+'</div></div>'
+      + '<div class="slog-field"><div class="slog-field-label">Status</div><div class="slog-field-val">'+(n.attendStatus||'Attended')+'</div></div>'
+      + '</div>'
+      + '<div class="slog-sig-area"><div class="slog-sig-label">Parent/Caregiver Signature</div>';
+    if(isSigned){
+      html += '<div style="font-size:.85rem;padding:6px 0;">Signed: '+sig.sigDate+'<button class="btn-d" style="margin-left:8px;font-size:.65rem;padding:3px 8px;" onclick="unsignRow(\''+c.name+'\','+n.id+')">Clear</button></div>';
+    } else {
+      html += '<div class="slog-sig-row">'
+        + '<input class="slog-sig-input" type="text" id="sig-name-'+n.id+'" placeholder="Parent/Caregiver name"/>'
+        + '<input class="slog-sig-date" type="date" id="sig-date-'+n.id+'" value="'+new Date().toISOString().split('T')[0]+'"/>'
+        + '<button class="slog-sign-btn" onclick="signRow(\''+c.name+'\','+n.id+')">Sign</button></div>';
+    }
+    html += '</div></div>';
+  });
+  rows.innerHTML = html;
+  // Init all canvases in the service log rows
+  setTimeout(function(){
+    var allNotes2 = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+    allNotes2.forEach(function(n){
+      var canvas = document.getElementById('slog-canvas-'+n.id);
+      if(canvas) initCanvas('slog-canvas-'+n.id);
+    });
+  }, 100);
+}
+function signRow(childName, noteId){
+  var canvas = document.getElementById('slog-canvas-'+noteId);
+  var dateEl = document.getElementById('sig-date-'+noteId);
+  if(canvas && isCanvasEmpty('slog-canvas-'+noteId)) return alert('Please draw the parent/caregiver signature first.');
+  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  if(!slogData[childName]) slogData[childName]={};
+  slogData[childName][noteId] = {signed:true, sigName:'Parent/Caregiver', sigDate:dateEl ? dateEl.value : new Date().toISOString().split('T')[0]};
+  localStorage.setItem('ei_slog_v4', JSON.stringify(slogData));
+  renderServiceLog();
+}
+function unsignRow(childName, noteId){
+  if(!confirm('Clear this signature?')) return;
+  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  if(slogData[childName]) delete slogData[childName][noteId];
+  localStorage.setItem('ei_slog_v4', JSON.stringify(slogData));
+  renderServiceLog();
+}
+function exportServiceLog(){
+  var idx = document.getElementById('slogChildSel').value; if(idx==='') return;
+  var c = children[parseInt(idx)], p = profile;
+  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var childNotes = allNotes.filter(function(n){ return n.childName===c.name; }).sort(function(a,b){ return new Date(a.sessDate)-new Date(b.sessDate); });
+  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var childSlog = slogData[c.name]||{};
+  var out = 'NYC EARLY INTERVENTION PROGRAM SERVICE LOG\n'+'='.repeat(50)+'\n\n';
+  out += "Child's Name: "+c.name+"\nDate of Birth: "+(c.dob||'—')+"\nChild's EI #: "+(c.ei||'—')+"\n";
+  out += "Service Type: "+(c.servType||'—')+"\nService Auth #: "+(c.auth||'—')+"\n";
+  out += "Interventionist: "+(p.name||'—')+(p.cred?', '+p.cred:'')+"\n";
+  out += "NPI #: "+(p.npi||'—')+"\n";
+  childNotes.forEach(function(n,i){
+    var sig = childSlog[n.id]||{};
+    var tm = n.header.match(/Time: ([^\n]+)/);
+    var dm = n.header.match(/Session Delivered: ([^\n]+)/);
+    var cm = n.header.match(/CPT: ([^\n]+)/);
+    out += "Row "+(i+1)+" · Date: "+n.sessDate+"\n";
+    out += "Time: "+(tm?tm[1]:'—')+"\nDelivery: "+(dm?dm[1]:'—')+"\nCPT: "+(cm?cm[1]:'—')+"\n";
+    out += "Signature: "+(sig.signed ? 'Signed '+sig.sigDate : 'UNSIGNED')+"\n\n";
+  });
+  navigator.clipboard.writeText(out).then(function(){ alert('Service Log copied to clipboard!'); });
+}
+
+// ── STEP 6 SERVICE LOG SIG ────────────────────────────────────
+function fillStep6(){
+  var idx = document.getElementById('childSel').value;
+  var child = idx !== '' ? children[parseInt(idx)] : null;
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('slogParentSigDate').value = today;
+  document.getElementById('slogSigChild').textContent = child ? child.name : '—';
+  document.getElementById('slogSigDate').textContent = g('sessDate')||'—';
+  var tf = g('timeFrom'), tt = g('timeTo');
+  document.getElementById('slogSigTime').textContent = (tf&&tt) ? tf+' - '+tt : '—';
+  document.getElementById('slogSigCPT').textContent = g('cptCode')||(child?child.cpt:'')||'—';
+  document.getElementById('slogSigDelivery').textContent = g('sessDelivered')||'—';
+}
+function saveServiceLogSig(){
+  var idx = document.getElementById('childSel').value;
+  var child = idx !== '' ? children[parseInt(idx)] : null;
+  if(!child) return alert('Please select a child first.');
+  if(isCanvasEmpty('parentSigCanvas')){ showError('step6Error','⚠️ Parent/Caregiver signature required.'); return; }
+  if(isCanvasEmpty('providerSigCanvasStep6')){ showError('step6Error','⚠️ Provider signature required.'); return; }
+  var sigDate = g('slogParentSigDate');
+  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var childNote = null;
+  for(var i=0;i<allNotes.length;i++){ if(allNotes[i].childName===child.name && allNotes[i].sessDate===g('sessDate')){ childNote=allNotes[i]; break; } }
+  if(!childNote) return alert('Please submit the note in Step 5 first.');
+  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  if(!slogData[child.name]) slogData[child.name]={};
+  slogData[child.name][childNote.id] = {signed:true, sigName:'Parent/Caregiver', sigDate:sigDate||new Date().toISOString().split('T')[0]};
+  localStorage.setItem('ei_slog_v4', JSON.stringify(slogData));
+  renderAttendance();
+  document.getElementById('slogSigSuccess').style.display='block';
+  setTimeout(function(){ document.getElementById('slogSigSuccess').style.display='none'; }, 3000);
+}
+
+// ── SIGNATURE CANVAS ──────────────────────────────────────────
+function initCanvas(canvasId){
+  var canvas = document.getElementById(canvasId);
+  if(!canvas || canvas._init) return;
+  canvas._init = true;
+  canvas.width = canvas.offsetWidth || canvas.parentElement.offsetWidth || 400;
+  var ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#1a202c'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  var drawing = false;
+  function getPos(e){
+    var r = canvas.getBoundingClientRect();
+    var sx = canvas.width/r.width, sy = canvas.height/r.height;
+    if(e.touches) return {x:(e.touches[0].clientX-r.left)*sx, y:(e.touches[0].clientY-r.top)*sy};
+    return {x:(e.clientX-r.left)*sx, y:(e.clientY-r.top)*sy};
+  }
+  function start(e){ e.preventDefault(); drawing=true; var p=getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); }
+  function draw(e){ e.preventDefault(); if(!drawing)return; var p=getPos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); }
+  function stop(){ drawing=false; }
+  canvas.addEventListener('mousedown',start); canvas.addEventListener('mousemove',draw);
+  canvas.addEventListener('mouseup',stop); canvas.addEventListener('mouseleave',stop);
+  canvas.addEventListener('touchstart',start,{passive:false}); canvas.addEventListener('touchmove',draw,{passive:false});
+  canvas.addEventListener('touchend',stop);
+}
+function clearCanvas(canvasId){
+  var canvas=document.getElementById(canvasId); if(!canvas)return;
+  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+}
+function isCanvasEmpty(canvasId){
+  var canvas=document.getElementById(canvasId); if(!canvas)return true;
+  var data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+  for(var i=0;i<data.length;i++){ if(data[i]!==0) return false; } return true;
+}
+function saveProviderSig(){
+  if(isCanvasEmpty('providerSigCanvas')) return alert('Please draw your signature first.');
+  document.getElementById('providerSigSuccess').style.display='block';
+}
+
+// ── COPY ─────────────────────────────────────────────────────
+function copyBlk(id, btn){
+  var el = document.getElementById(id); if(!el)return;
+  var t = el.tagName==='TEXTAREA' ? el.value : el.innerText;
+  if(!t)return;
+  navigator.clipboard.writeText(t).then(function(){
+    btn.textContent='Copied!'; btn.classList.add('copied');
+    setTimeout(function(){ btn.textContent='Copy'; btn.classList.remove('copied'); },2000);
+  });
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+function g(id){ var e=document.getElementById(id); return e?e.value.trim():''; }
+function s(id,val){ var e=document.getElementById(id); if(e&&val!==undefined)e.value=val||''; }
+function showBadge(id){ var e=document.getElementById(id); e.style.display='inline-block'; setTimeout(function(){ e.style.display='none'; },2500); }
+
+function startNewNote(){
+  // Reset all note fields
+  currentStep = 1;
+  updateStepUI();
+  // Clear step 3 fields
+  document.getElementById('rawNotes').value = '';
+  document.getElementById('rawProgress') && (document.getElementById('rawProgress').value = '');
+  document.getElementById('caregiverAgreedText').value = '';
+  document.getElementById('naBox').value = 'NA';
+  document.getElementById('otherCollab').value = '';
+  // Uncheck all checkboxes
+  document.querySelectorAll('.chk-box.on').forEach(function(b){ b.classList.remove('on'); });
+  document.querySelectorAll('.resp-btn.on').forEach(function(b){ b.classList.remove('on'); });
+  document.querySelectorAll('.goal-chk-item .chk-box').forEach(function(b){ b.classList.remove('on'); });
+  // Hide output
+  document.getElementById('outSec').style.display = 'none';
+  document.getElementById('providerSigSuccess').style.display = 'none';
+  // Reset submit button
+  document.getElementById('submitNoteBtn').style.display = 'flex';
+  document.getElementById('submitNoteBtn').innerHTML = '<span>Submit & Save Note</span>';
+  // Clear canvases
+  clearCanvas('parentSigCanvas');
+  clearCanvas('providerSigCanvas');
+  window.scrollTo(0,0);
+}
+
+
+function findAndRestoreData(){
+  var result = document.getElementById('diagResult');
+  result.style.display = 'block';
+  var found = [];
+  var restored = false;
+
+  // Scan ALL localStorage keys
+  for(var i = 0; i < localStorage.length; i++){
+    var key = localStorage.key(i);
+    try {
+      var val = localStorage.getItem(key);
+      var parsed = JSON.parse(val);
+      if(Array.isArray(parsed) && parsed.length > 0 && parsed[0].name){
+        found.push('KEY: ' + key + ' → ' + parsed.length + ' children: ' + parsed.map(function(c){ return c.name; }).join(', '));
+        // Restore if we don't have children yet
+        if(!children.length || children.length === 0){
+          children = parsed;
+          localStorage.setItem('ei_c4', JSON.stringify(children));
+          renderChildList();
+          renderChildSel();
+          restored = true;
+          found.push('✅ RESTORED ' + parsed.length + ' children from ' + key);
+        }
+      }
+      if(!Array.isArray(parsed) && parsed && parsed.name && typeof parsed.name === 'string' && parsed.name.length > 1){
+        found.push('PROFILE KEY: ' + key + ' → ' + parsed.name);
+        if(!profile.name){
+          profile = parsed;
+          localStorage.setItem('ei_p4', JSON.stringify(profile));
+          loadProfileForm();
+          found.push('✅ RESTORED profile from ' + key);
+        }
+      }
+    } catch(e){}
+  }
+
+  if(found.length === 0){
+    result.textContent = 'No saved data found in this browser.\nYou may need to re-enter your children.';
+  } else {
+    result.textContent = found.join('\n');
+  }
+}
+
+
+function updateAuthDisplay(){
+  var val = document.getElementById('nCDuration').value;
+  var customRow = document.getElementById('customAuthRow');
+  customRow.style.display = val === 'custom' ? 'block' : 'none';
+}
+
+function getAuthCode(){
+  var val = document.getElementById('nCDuration').value;
+  if(val === 'custom') return g('nCCustomAuth');
+  return val;
+}
+
+function getSessionDuration(){
+  var val = document.getElementById('nCDuration').value;
+  if(val === 'custom'){
+    var custom = g('nCCustomAuth');
+    var match = custom.match(/\d+x(\d+)/i);
+    return match ? match[1] : '60';
+  }
+  // Parse duration from value e.g. "10x60" -> "60", "2x30" -> "30"
+  var match = val.match(/\d+x(\d+)/i);
+  return match ? match[1] : '60';
+}
+
+</script>
+</body>
+</html>
