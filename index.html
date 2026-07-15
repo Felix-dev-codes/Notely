@@ -1419,14 +1419,14 @@ async function generateNote(){
   document.getElementById('oCoaching').value = coaching.length ? coaching.join('\n') : 'No coaching methods selected.';
   document.getElementById('oNarrative').value = 'Generating...';
 
-  var prompt = 'You are an NYC Early Intervention documentation specialist writing a compliant NYC EI Session Note (Version 1/2013).\n\n'
+  var prompt = 'NYC EI session note. Write EXACTLY 2-3 short sentences only. CHILD: '+cName+' SERVICE: '+(child&&child.servType?child.servType:'EI')+' GOALS: '+(selGoals.length?selGoals.join('; '):'General goals')+' NOTES: '+rawNotes+' Write 2-3 brief clinical sentences: activity, strategy, child response. First name only. No bullet points. No markdown.'
     + 'CHILD: '+cName+'\nSESSION DATE: '+sessDate+'\nSERVICE TYPE: '+(child && child.servType ? child.servType : profile.type || 'Early Intervention')+'\n'
     + 'PARTICIPANTS: '+(participants.length ? participants.join(', ') : 'Child and caregiver')+'\n'
     + 'SERVICE LOCATION: '+servLoc+'\nICD-10: '+icd+' | CPT: '+cpt+'\n'
     + 'COACHING METHODS: '+(coaching.length ? coaching.join(', ') : 'not specified')+'\n\n'
     + 'IFSP GOALS ADDRESSED:\n'+(selGoals.length ? selGoals.map(function(goal,i){ return (i+1)+'. '+goal; }).join('\n') : 'General developmental goals')+'\n\n'
     + 'RAW SESSION NOTES:\n'+rawNotes+'\n\n'
-    + 'Write a single professional, audit-ready clinical narrative paragraph (4-6 sentences) for the NYC EI session note. '
+    + 'Write 2-3 short clinical sentences only: what was worked on, strategies used, child response. Use '+cName+'\'s first name. No bullet points. No markdown. Keep it very brief.'; '
     + 'Use '+cName+'\'s first name. Include: progress toward IFSP outcomes, routine activity, strategies used, and caregiver feedback. No bullet points.';
 
   try {
