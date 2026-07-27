@@ -1526,6 +1526,39 @@
       <button class="btn-p" style="margin-top:14px;" onclick="generate837P()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Generate &amp; Download 837P File</button>
       <div id="billError" style="display:none;background:rgba(220,38,38,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:10px;font-size:.82rem;color:#dc2626;"></div>
     </div>
+
+    <!-- RATE SCHEDULE -->
+    <div class="div" style="margin-top:26px;"></div>
+    <div class="slabel">Rate Schedule</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Amount billed per 15-minute unit. Service coordination pays a different rate from therapy, so each code is priced separately.</div>
+    <div id="rateFormWrap">
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">CPT / HCPCS Code</div>
+          <input type="text" id="rateCode" placeholder="e.g. 97112 or T1017"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Rate Per Unit ($)</div>
+          <input type="text" id="rateAmt" placeholder="e.g. 27.84"/>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Modifier <span style="color:var(--muted);font-weight:400;">(blank for none)</span></div>
+          <input type="text" id="rateMod" placeholder="e.g. 96"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Description</div>
+          <input type="text" id="rateDesc" placeholder="e.g. PT therapeutic exercise"/>
+        </div>
+      </div>
+      <div class="val-error" id="rateError"></div>
+      <button class="btn-p" onclick="saveRate()"><span id="rateSaveTxt">Add Rate</span></button>
+      <button class="btn-s" id="rateCancelBtn" onclick="cancelRateEdit()" style="margin-top:8px;display:none;">Cancel Edit</button>
+      <div class="sbadge" id="rateBadge">Saved</div>
+    </div>
+    <div id="rateEmpty" class="ibox" style="margin-top:12px;">No rates configured yet.</div>
+    <div id="rateList" style="margin-top:12px;"></div>
   </div>
 
   </div><!-- end pages-wrap -->
@@ -1657,7 +1690,8 @@ function showPage(page, el){
   }
   if(el) el.classList.add('active');
   if(page === 'servicelog'){ renderSlogChildSel(); renderServiceLog(); }
-  if(page === 'billing'){ renderBillingChildSel(); }
+  if(page === 'billing'){ renderBillingChildSel(); renderRates();
+    document.getElementById('rateFormWrap').style.display = isAdmin() ? '' : 'none'; }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
   if(page === 'users'){ renderUsers(); }
   if(page === 'scripts'){
@@ -2689,7 +2723,8 @@ function renderBillingSession(){
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length === 2 ? toMins(parts[1].trim()) - toMins(parts[0].trim()) : 0;
     var units = mins > 0 ? Math.round(mins/15) : 0;
-    var amount = (units * 27.84).toFixed(2);
+    var rt = getRate(cptCode);
+    var amount = rt ? (units * rt.rate).toFixed(2) : '0.00';
     totalUnits += units;
     totalAmount += parseFloat(amount);
     var billedBadge = n.billed ? '<span style="background:rgba(22,163,74,.1);color:#15803d;font-size:.65rem;padding:2px 6px;border-radius:10px;margin-left:6px;">Billed</span>' : '';
@@ -2825,9 +2860,12 @@ function generate837P(){
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length===2 ? toMins(endRaw)-toMins(startRaw) : 60;
     var units = mins>0 ? Math.round(mins/15) : 4;
-    var amount = (units*27.84).toFixed(2);
     var cptM = n.header.match(/CPT: ([^\n]+)/);
     var cptCode = cptM ? cptM[1].trim().split(' ')[0] : '97155';
+    // Must come after cptCode is known, or every line silently prices at the
+    // default rate and modifier.
+    var rt = getRate(cptCode);
+    var amount = rt ? (units*rt.rate).toFixed(2) : '0.00';
     var vtM = n.header.match(/Visit Type: ([^\n]+)/);
     var visitType = vtM ? vtM[1].trim() : 'CV1';
     var posM = n.header.match(/Place of Service: ([^\n]+)/);
@@ -2855,7 +2893,7 @@ function generate837P(){
     // Loop 2310B — rendering provider is the clinician who delivered the service
     seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
     seg.push('LX*1');
-    seg.push('SV1*HC:'+cptCode+':96*'+amount+'*UN*'+units+'***1');
+    seg.push('SV1*HC:'+cptCode+(rt && rt.mod ? ':'+rt.mod : '')+'*'+amount+'*UN*'+units+'***1');
     seg.push('DTP*472*D8*'+sessDateFmt);
     seg.push('REF*6R*'+claimId+'L1');
   });
@@ -2981,6 +3019,95 @@ function copyBlk(id, btn){
     btn.textContent='Copied!'; btn.classList.add('copied');
     setTimeout(function(){ btn.textContent='Copy'; btn.classList.remove('copied'); },2000);
   });
+}
+
+// ── RATE SCHEDULE ─────────────────────────────────────────────
+// Billed amount per 15-minute unit, keyed by procedure code. Service
+// coordination (T1017) pays a different rate from therapy, and the EI-Hub
+// guide shows T1017 carrying no modifier, so both live with the code.
+// The '*' row is an explicit, visible default for codes not listed.
+var editRateId = null;
+function ratesLoad(){ return JSON.parse(localStorage.getItem('ei_rates_v4')||'[]'); }
+function ratesSave(a){ localStorage.setItem('ei_rates_v4', JSON.stringify(a)); }
+
+function seedRates(){
+  if(ratesLoad().length) return;
+  ratesSave([
+    {id:uid('rt'), code:'*',     rate:27.84, mod:'96', desc:'Default for unlisted codes — verify against your rate schedule'},
+    {id:uid('rt'), code:'T1017', rate:19.09, mod:'',   desc:'Service coordination, per 15 minutes'}
+  ]);
+}
+
+// Returns {rate, mod, code} or null when nothing covers the code.
+function getRate(code){
+  seedRates();
+  var arr = ratesLoad();
+  var c = (code||'').toUpperCase().trim();
+  var hit = arr.filter(function(r){ return r.code.toUpperCase() === c; })[0];
+  if(!hit) hit = arr.filter(function(r){ return r.code === '*'; })[0];
+  return hit ? {rate:parseFloat(hit.rate), mod:(hit.mod||''), code:hit.code} : null;
+}
+
+function saveRate(){
+  var code = g('rateCode').toUpperCase().replace(/[^A-Z0-9*]/g,'');
+  if(!code) return showError('rateError','Enter a CPT/HCPCS code, or * for the default.');
+  var amt = parseFloat(g('rateAmt'));
+  if(isNaN(amt) || amt <= 0) return showError('rateError','Enter a rate greater than zero.');
+  var arr = ratesLoad();
+  var dupe = arr.filter(function(r){ return r.code.toUpperCase()===code && r.id!==editRateId; })[0];
+  if(dupe) return showError('rateError','A rate for '+code+' already exists.');
+  var rec = {id: editRateId || uid('rt'), code:code, rate:amt,
+             mod:g('rateMod').replace(/[^A-Za-z0-9]/g,''), desc:g('rateDesc')};
+  if(editRateId){ for(var i=0;i<arr.length;i++){ if(arr[i].id===editRateId){ arr[i]=rec; break; } } }
+  else arr.push(rec);
+  ratesSave(arr);
+  clearError('rateError'); showBadge('rateBadge'); cancelRateEdit(); renderRates();
+  if(document.getElementById('billChildSel') && document.getElementById('billChildSel').value !== '') renderBillingSession();
+}
+
+function editRate(id){
+  var r = ratesLoad().filter(function(x){ return x.id===id; })[0]; if(!r) return;
+  editRateId = id;
+  s('rateCode',r.code); s('rateAmt',r.rate); s('rateMod',r.mod); s('rateDesc',r.desc);
+  document.getElementById('rateSaveTxt').textContent='Update Rate';
+  document.getElementById('rateCancelBtn').style.display='block';
+}
+
+function cancelRateEdit(){
+  editRateId=null;
+  ['rateCode','rateAmt','rateMod','rateDesc'].forEach(function(i){ s(i,''); });
+  document.getElementById('rateSaveTxt').textContent='Add Rate';
+  document.getElementById('rateCancelBtn').style.display='none';
+}
+
+function deleteRate(id){
+  var r = ratesLoad().filter(function(x){ return x.id===id; })[0];
+  if(r && r.code==='*') return alert('The default rate cannot be removed. Edit it instead, or add a specific code to override it.');
+  if(!confirm('Remove this rate?')) return;
+  ratesSave(ratesLoad().filter(function(x){ return x.id!==id; }));
+  renderRates();
+}
+
+function renderRates(){
+  var list=document.getElementById('rateList'), empty=document.getElementById('rateEmpty');
+  if(!list) return;
+  seedRates();
+  var arr=ratesLoad().slice().sort(function(a,b){
+    if(a.code==='*') return -1; if(b.code==='*') return 1;
+    return a.code.localeCompare(b.code);
+  });
+  if(!arr.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  list.innerHTML = arr.map(function(r){
+    var label = r.code==='*' ? 'Default (unlisted codes)' : r.code + (r.mod?' · modifier '+r.mod:' · no modifier');
+    return '<div class="ucard"><div><div class="cname">$'+parseFloat(r.rate).toFixed(2)+' <span style="font-weight:400;font-size:.78rem;color:var(--muted);">per unit</span></div>'
+      + '<div class="cmeta">'+label+'</div>'
+      + (r.desc?'<div class="cmeta">'+r.desc+'</div>':'')+'</div>'
+      + '<div style="display:flex;gap:8px;flex-shrink:0;">'
+      + '<button class="btn-s" onclick="editRate(\''+r.id+'\')">Edit</button>'
+      + (r.code==='*' ? '' : '<button class="btn-d" onclick="deleteRate(\''+r.id+'\')">x</button>')
+      + '</div></div>';
+  }).join('');
 }
 
 // ── DOCTOR REGISTRY & SCRIPTS ─────────────────────────────────
