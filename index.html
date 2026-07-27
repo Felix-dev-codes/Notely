@@ -1055,8 +1055,28 @@
         <input type="password" id="pTaxID" placeholder="Enter Tax ID" maxlength="11"/>
       </div>
       <div class="mb12">
-        <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Provider Address</div>
-        <input type="text" id="pAddress" placeholder="e.g. 1013 Seawane Drive, Hewlett NY 11557"/>
+        <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Street Address</div>
+        <input type="text" id="pStreet" placeholder="e.g. 1013 Seawane Drive"/>
+      </div>
+      <div class="g2 mb12">
+        <div>
+          <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">City</div>
+          <input type="text" id="pCity" placeholder="e.g. Hewlett"/>
+        </div>
+        <div>
+          <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">State</div>
+          <input type="text" id="pState" placeholder="NY" maxlength="2"/>
+        </div>
+      </div>
+      <div class="g2 mb12">
+        <div>
+          <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">ZIP Code</div>
+          <input type="text" id="pZip" placeholder="e.g. 11557"/>
+        </div>
+        <div>
+          <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Billing Contact Phone</div>
+          <input type="text" id="pPhone" placeholder="e.g. 5165557777"/>
+        </div>
       </div>
       <button class="btn-p" onclick="saveProfile()"><span>Save Profile</span></button>
       <div class="sbadge" id="pSaveBadge">Profile Saved!</div>
@@ -1194,8 +1214,28 @@
         </div>
       </div>
       <div class="field-group">
-        <div class="field-label">Business Address</div>
-        <input type="text" id="uAddress" placeholder="Street, City, State ZIP"/>
+        <div class="field-label">Street Address</div>
+        <input type="text" id="uStreet" placeholder="e.g. 1013 Seawane Drive"/>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">City</div>
+          <input type="text" id="uCity" placeholder="e.g. Hewlett"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">State</div>
+          <input type="text" id="uState" placeholder="NY" maxlength="2"/>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">ZIP Code</div>
+          <input type="text" id="uZip" placeholder="e.g. 11557"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Billing Contact Phone</div>
+          <input type="text" id="uPhone" placeholder="e.g. 5165557777"/>
+        </div>
       </div>
 
       <div class="val-error" id="uError"></div>
@@ -1743,7 +1783,9 @@ function getChecked(containerId){
 
 // ── PROFILE ───────────────────────────────────────────────────
 function saveProfile(){
-  profile = { name:g('pName'), cred:g('pCred'), npi:g('pNPI'), lic:g('pLic'), taxId:g('pTaxID'), address:g('pAddress'), agency:g('pAgency'), progId:g('pProgID'), type:g('pType') };
+  profile = { name:g('pName'), cred:g('pCred'), npi:g('pNPI'), lic:g('pLic'), taxId:g('pTaxID'),
+    street:g('pStreet'), city:g('pCity'), state:g('pState'), zip:g('pZip'), phone:g('pPhone'),
+    agency:g('pAgency'), progId:g('pProgID'), type:g('pType') };
   localStorage.setItem('ei_p4', JSON.stringify(profile));
   showBadge('pSaveBadge');
 }
@@ -1751,7 +1793,9 @@ function loadProfileForm(){
   if(!profile.name) return;
   s('pName',profile.name); s('pCred',profile.cred); s('pNPI',profile.npi);
   s('pLic',profile.lic); s('pAgency',profile.agency); s('pProgID',profile.progId); s('pType',profile.type);
-  s('pTaxID',profile.taxId||''); s('pAddress',profile.address||'');
+  s('pTaxID',profile.taxId||'');
+  s('pStreet',profile.street||''); s('pCity',profile.city||'');
+  s('pState',profile.state||''); s('pZip',profile.zip||''); s('pPhone',profile.phone||'');
 }
 
 // ── CHILDREN ─────────────────────────────────────────────────
@@ -2669,7 +2713,27 @@ function generate837P(){
   var invoiceNum = document.getElementById('billInvoiceNum').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
   var errEl = document.getElementById('billError');
   if(!invoiceNum){ errEl.style.display='block'; errEl.innerText='Please enter a unique Invoice Number.'; return; }
-  if(!p.taxId){ errEl.style.display='block'; errEl.innerText='Please add your Tax ID in the Profile tab first.'; return; }
+  // Never fall back to placeholder identity or address. Emitting one
+  // clinician's NPI or address on another's claim is a misrepresentation,
+  // so refuse and name exactly what is missing.
+  var missing = [];
+  if(!p.name) missing.push('Provider name');
+  if(!(p.npi||'').replace(/[^0-9]/g,'')) missing.push('Provider NPI');
+  if(!p.taxId) missing.push('Tax ID');
+  if(!p.street) missing.push('Street address');
+  if(!p.city) missing.push('City');
+  if(!p.state) missing.push('State');
+  if(!p.zip) missing.push('ZIP code');
+  if(!p.phone) missing.push('Billing contact phone');
+  if(missing.length){
+    errEl.style.display='block';
+    errEl.innerText='Cannot bill — missing billing provider details:\n\n• '+missing.join('\n• ')
+      +'\n\nAdd these under the Profile tab (or Staff, if an admin set you up).';
+    return;
+  }
+  if((p.npi||'').replace(/[^0-9]/g,'').length !== 10){
+    errEl.style.display='block'; errEl.innerText='Provider NPI must be exactly 10 digits.'; return;
+  }
   if(!c.ei){ errEl.style.display='block'; errEl.innerText='Child EI# is required. Please update the child profile.'; return; }
   errEl.style.display='none';
 
@@ -2713,8 +2777,8 @@ function generate837P(){
   var yyyymmdd = now.getFullYear()+('0'+(now.getMonth()+1)).slice(-2)+('0'+now.getDate()).slice(-2);
   var hhmm = ('0'+now.getHours()).slice(-2)+('0'+now.getMinutes()).slice(-2);
   var taxId = p.taxId.replace(/[^0-9]/g,'');
-  var npi = (p.npi||'1922360759').replace(/[^0-9]/g,'');
-  var provName = (p.name||'Felix Meshman').toUpperCase();
+  var npi = (p.npi||'').replace(/[^0-9]/g,'');
+  var provName = (p.name||'').toUpperCase();
   var provParts = provName.split(' ');
   var provLast = provParts[provParts.length-1];
   var provFirst = provParts[0];
@@ -2736,12 +2800,12 @@ function generate837P(){
   seg.push('ST*837*0001*005010X222A1');
   seg.push('BHT*0019*00*'+invoiceNum+'*'+yyyymmdd+'*'+hhmm+'*CH');
   seg.push('NM1*41*1*'+provLast+'*'+provFirst+'****46*'+npi);
-  seg.push('PER*IC*'+provFirst+' '+provLast+'*TE*8665553747');
+  seg.push('PER*IC*'+provFirst+' '+provLast+'*TE*'+p.phone.replace(/[^0-9]/g,''));
   seg.push('NM1*40*2*NEW YORK CITY- EARLY INTERVENTION*****46*70');
   seg.push('HL*1**20*1');
   seg.push('NM1*85*1*'+provLast+'*'+provFirst+'****XX*'+npi);
-  seg.push('N3*1013 SEAWANE DRIVE');
-  seg.push('N4*HEWLETT*NY*115570000');
+  seg.push('N3*'+p.street.toUpperCase());
+  seg.push('N4*'+p.city.toUpperCase()+'*'+p.state.toUpperCase()+'*'+p.zip.replace(/[^0-9]/g,'').padEnd(9,'0'));
   seg.push('REF*EI*'+taxId);
   seg.push('HL*2*1*22*0');
   seg.push('SBR*P*18*******OF');
@@ -3133,7 +3197,8 @@ function saveUser(){
     id: editUserId || uid('u'),
     firstName:g('uFirst'), lastName:g('uLast'), role:g('uRole')||'therapist',
     npi:g('uNPI'), cred:g('uCred'), lic:g('uLic'),
-    agency:g('uAgency'), taxId:g('uTaxID'), address:g('uAddress')
+    agency:g('uAgency'), taxId:g('uTaxID'),
+    street:g('uStreet'), city:g('uCity'), state:g('uState'), zip:g('uZip'), phone:g('uPhone')
   };
   if(editUserId){
     for(var i=0;i<arr.length;i++){ if(arr[i].id===editUserId){ rec.children = arr[i].children||[]; arr[i]=rec; break; } }
@@ -3156,7 +3221,8 @@ function editUser(id){
   editUserId = id;
   s('uFirst',u.firstName); s('uLast',u.lastName); s('uRole',u.role);
   s('uNPI',u.npi); s('uCred',u.cred); s('uLic',u.lic);
-  s('uAgency',u.agency); s('uTaxID',u.taxId); s('uAddress',u.address);
+  s('uAgency',u.agency); s('uTaxID',u.taxId);
+  s('uStreet',u.street); s('uCity',u.city); s('uState',u.state); s('uZip',u.zip); s('uPhone',u.phone);
   document.getElementById('uFormLbl').textContent = 'Editing: '+userFullName(u);
   document.getElementById('uSaveTxt').textContent = 'Update Staff Member';
   document.getElementById('uCancelBtn').style.display = 'block';
@@ -3165,7 +3231,7 @@ function editUser(id){
 
 function cancelUserEdit(){
   editUserId = null;
-  ['uFirst','uLast','uNPI','uCred','uLic','uAgency','uTaxID','uAddress'].forEach(function(id){ s(id,''); });
+  ['uFirst','uLast','uNPI','uCred','uLic','uAgency','uTaxID','uStreet','uCity','uState','uZip','uPhone'].forEach(function(id){ s(id,''); });
   s('uRole','therapist');
   document.getElementById('uFormLbl').textContent = 'Add Staff Member';
   document.getElementById('uSaveTxt').textContent = 'Add Staff Member';
@@ -3236,7 +3302,8 @@ function applyActiveUser(u){
   activeUser = u;
   profile = {
     name: userFullName(u), cred:u.cred||'', npi:u.npi||'', lic:u.lic||'',
-    taxId:u.taxId||'', address:u.address||'', agency:u.agency||'',
+    taxId:u.taxId||'', agency:u.agency||'',
+    street:u.street||'', city:u.city||'', state:u.state||'', zip:u.zip||'', phone:u.phone||'',
     progId:(profile&&profile.progId)||'', type:(profile&&profile.type)||''
   };
   localStorage.setItem('ei_p4', JSON.stringify(profile));
