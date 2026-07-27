@@ -30,8 +30,9 @@
     .progress-seg.active{background:rgba(255,255,255,0.7);}
 
     /* NAV TABS for Profile/Children */
-    .nav-strip{display:flex;border-bottom:2px solid var(--border);background:var(--white);}
-    .nav-strip-tab{flex:1;text-align:center;padding:12px 4px;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+    /* Wraps to two rows on phones so every tab stays reachable */
+    .nav-strip{display:flex;flex-wrap:wrap;border-bottom:2px solid var(--border);background:var(--white);}
+    .nav-strip-tab{flex:1 0 25%;text-align:center;padding:12px 4px;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;transition:all .2s;}
     .nav-strip-tab.active{color:var(--primary);border-bottom-color:var(--primary);}
 
     /* PAGES */
@@ -267,6 +268,7 @@
         grid-column: 1;
         grid-row: 1;
         flex-direction: column;
+        flex-wrap: nowrap;
         align-items: stretch;
         gap: 2px;
         padding: 18px 0;
@@ -375,6 +377,7 @@
   <!-- TOP STRIP NAV (Profile / Children / Note) -->
   <div class="nav-strip" id="mainNav">
     <div class="nav-strip-tab active" onclick="showPage('note',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>Note</div>
+    <div class="nav-strip-tab" onclick="showPage('sc',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>SC Note</div>
     <div class="nav-strip-tab" onclick="showPage('children',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Children</div>
     <div class="nav-strip-tab" onclick="showPage('profile',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>Profile</div>
     <div class="nav-strip-tab" onclick="showPage('history',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>History</div>
@@ -450,17 +453,17 @@
         <div class="field-group field-divider">
           <div class="field-label">Visit Type</div>
           <select id="visitType">
-            <option value="CV1">CV1 — Regular Visit</option>
-            <option value="CV2">CV2 — Make-Up Visit</option>
-            <option value="CV3">CV3 — Co-Visit</option>
+            <option value="CV1">Regular Visit</option>
+            <option value="CV2">Make-Up Visit</option>
+            <option value="CV3">Co-Visit</option>
           </select>
         </div>
         <div class="field-group field-divider">
           <div class="field-label">Place of Service</div>
           <select id="placeOfService">
-            <option value="12">12 — Home</option>
-            <option value="11">11 — Office</option>
-            <option value="99">99 — Community/Other</option>
+            <option value="12">Home</option>
+            <option value="11">Office</option>
+            <option value="99">Community/Other</option>
           </select>
         </div>
         <div class="field-group field-divider">
@@ -1098,6 +1101,136 @@
     </div>
   </div>
 
+  <!-- ══════════ SERVICE COORDINATION NOTE PAGE ══════════ -->
+  <div class="page" id="page-sc">
+    <div class="inner-pad">
+      <div class="slabel" style="margin-top:8px;">Early Intervention Service Coordination Note</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;line-height:1.5;">Contact log for service coordination activity. Bills as <b>T1017</b> in 15-minute units — separate from therapist session notes.</div>
+
+      <!-- CHILD INFORMATION -->
+      <div class="sec-header" style="margin-bottom:12px;">Child Information</div>
+      <div class="field-group">
+        <div class="field-label">Child</div>
+        <select id="scChild" onchange="onScChildChange()"><option value="">— Select Child —</option></select>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Date of Birth</div>
+          <input type="text" id="scDOB" placeholder="—" readonly style="color:var(--muted);"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Date of Service</div>
+          <input type="date" id="scDate"/>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Service Coordinator</div>
+          <input type="text" id="scName" placeholder="e.g. Maria Reyes"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Role</div>
+          <select id="scRole">
+            <option value="Ongoing Service Coordinator">Ongoing Service Coordinator</option>
+            <option value="Initial Service Coordinator">Initial Service Coordinator</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- TIME & DURATION -->
+      <div class="sec-header" style="margin-bottom:12px;">Time &amp; Duration</div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Start Time</div>
+          <input type="time" id="scStart" onchange="calcScDuration()"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">End Time</div>
+          <input type="time" id="scEnd" onchange="calcScDuration()"/>
+        </div>
+      </div>
+      <div id="scDurBox" class="ibox" style="margin-bottom:18px;">Enter a start and end time to calculate duration.</div>
+
+      <!-- 1. ACTIVITY -->
+      <div class="sec-header" style="margin-bottom:12px;">1 · Service Coordination Activity Performed</div>
+      <div class="field-group">
+        <div class="field-label">Activity Type</div>
+        <select id="scActivity" onchange="onScActivityChange()">
+          <option value="">Select...</option>
+          <option>Intake / Assessment</option>
+          <option>IFSP Review / Meeting</option>
+          <option>Referral &amp; Provider Setup</option>
+          <option>Transition Planning</option>
+          <option>Family Consultation</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="field-group" id="scActivityOtherWrap" style="display:none;">
+        <div class="field-label">Describe Activity</div>
+        <input type="text" id="scActivityOther" placeholder="Type activity"/>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Summary of Activity</div>
+        <textarea id="scSummary" rows="4" placeholder="Details of the specific coordination activity completed..."></textarea>
+      </div>
+
+      <!-- 2. CONTACT DETAILS -->
+      <div class="sec-header" style="margin-bottom:12px;">2 · Contact Details <span style="color:var(--muted);font-weight:400;">(if applicable)</span></div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Person Contacted</div>
+          <input type="text" id="scPerson" placeholder="Name"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Relationship / Role</div>
+          <input type="text" id="scRelation" placeholder="e.g. Mother, PT, EIOD"/>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Contact Method</div>
+        <select id="scMethod">
+          <option value="">Select...</option>
+          <option>Phone</option>
+          <option>In-Person</option>
+          <option>Video Call</option>
+          <option>Email</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Purpose of Contact</div>
+        <textarea id="scPurpose" rows="3" placeholder="Reason for the contact..."></textarea>
+      </div>
+
+      <!-- 3. IFSP CONNECTION -->
+      <div class="sec-header" style="margin-bottom:12px;">3 · IFSP Implementation Connection</div>
+      <div class="field-group">
+        <textarea id="scIFSP" rows="3" placeholder="How this activity directly supports current IFSP outcomes, goals, or service delivery..."></textarea>
+      </div>
+
+      <!-- 4. FOLLOW-UP -->
+      <div class="sec-header" style="margin-bottom:12px;">4 · Follow-Up / Next Steps</div>
+      <div id="scActionRows"></div>
+      <button class="btn-s" onclick="addScAction()" style="margin-bottom:18px;">+ Add Action Item</button>
+
+      <!-- AUTHORIZATION -->
+      <div class="sec-header" style="margin-bottom:12px;">Authorization</div>
+      <div class="field-group">
+        <div class="field-label">Service Coordinator Signature</div>
+        <input type="text" id="scSig" placeholder="Type full name as digital signature"/>
+      </div>
+
+      <div class="val-error" id="scError"></div>
+      <button class="btn-p" onclick="saveScNote()"><span id="scSaveTxt">Save SC Note</span></button>
+      <div class="sbadge" id="scBadge">Saved</div>
+
+      <!-- SAVED NOTES -->
+      <div class="div" style="margin-top:24px;"></div>
+      <div class="slabel">Saved SC Notes</div>
+      <div id="scEmpty" class="ibox">No service coordination notes saved yet.</div>
+      <div id="scList"></div>
+    </div>
+  </div>
+
   <!-- BILLING PAGE -->
   <div class="page" id="page-billing">
     <div class="slabel"><span class="nav-icon" data-lucide="credit-card"></span> Billing — 837P Generator</div>
@@ -1257,9 +1390,18 @@ function showPage(page, el){
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
   document.querySelectorAll('.nav-strip-tab').forEach(function(t){ t.classList.remove('active'); });
   document.getElementById('page-'+page).classList.add('active');
-  el.classList.add('active');
+  // Fall back to locating the tab by the page it opens, so callers never
+  // have to depend on tab order (which changes when tabs are added).
+  if(!el){
+    document.querySelectorAll('.nav-strip-tab').forEach(function(t){
+      var oc = t.getAttribute('onclick')||'';
+      if(oc.indexOf("showPage('"+page+"'") !== -1) el = t;
+    });
+  }
+  if(el) el.classList.add('active');
   if(page === 'servicelog'){ renderSlogChildSel(); renderServiceLog(); }
   if(page === 'billing'){ renderBillingChildSel(); }
+  if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
 }
 
 // ── STEP NAV ──────────────────────────────────────────────────
@@ -1535,7 +1677,7 @@ function editChild(i){
   c = repairChildGoals(c); tempGoals = [].concat(c.goals||[]); renderTempGoals();
   document.getElementById('childFormLbl').textContent = 'Editing: '+c.name;
   document.getElementById('saveCBtnTxt').textContent = 'Update Child Profile';
-  showPage('children', document.querySelectorAll('.nav-strip-tab')[1]);
+  showPage('children');
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function deleteChild(i){
@@ -2492,6 +2634,217 @@ function copyBlk(id, btn){
   });
 }
 
+// ── SERVICE COORDINATION NOTES ────────────────────────────────
+// SC activity bills as T1017 in 15-minute units. Per the NYS EI-Hub 837P
+// Companion Guide v5.0.0, SC uses Loop 2400 NTE (HHMM-HHMM, no visit-type
+// prefix) with each same-day encounter on its own service line — which is
+// why these are stored separately from therapist session notes.
+function scLoad(){ return JSON.parse(localStorage.getItem('ei_sc_v4')||'[]'); }
+function scSave(arr){ localStorage.setItem('ei_sc_v4', JSON.stringify(arr)); }
+
+function renderScChildSel(){
+  var sel = document.getElementById('scChild');
+  if(!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">— Select Child —</option>';
+  children.forEach(function(c,i){
+    var o = document.createElement('option');
+    o.value = i; o.textContent = c.name;
+    sel.appendChild(o);
+  });
+  if(cur && children[parseInt(cur)]) sel.value = cur;
+  // Default the coordinator name and service date on first open
+  if(!g('scName') && profile && profile.name) s('scName', profile.name);
+  if(!g('scDate')) s('scDate', new Date().toISOString().slice(0,10));
+  if(!document.querySelectorAll('#scActionRows .sc-action').length) addScAction();
+}
+
+function onScChildChange(){
+  var idx = g('scChild');
+  var c = idx !== '' ? children[parseInt(idx)] : null;
+  s('scDOB', c && c.dob ? c.dob : '');
+}
+
+function calcScDuration(){
+  var box = document.getElementById('scDurBox');
+  var st = g('scStart'), en = g('scEnd');
+  if(!st || !en){ box.textContent = 'Enter a start and end time to calculate duration.'; return; }
+  function mins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
+  var d = mins(en) - mins(st);
+  if(d <= 0){ box.innerHTML = '<span style="color:var(--red);font-weight:600;">End time must be after start time.</span>'; return; }
+  var units = Math.round(d/15);
+  var txt = '<b>'+d+' minutes</b> · T1017 units: <b>'+units+'</b>';
+  if(units === 0) txt += '<br><span style="color:#b45309;">Under 8 minutes rounds to 0 billable units — verify against your billing policy.</span>';
+  box.innerHTML = txt;
+}
+
+function onScActivityChange(){
+  document.getElementById('scActivityOtherWrap').style.display = g('scActivity') === 'Other' ? 'block' : 'none';
+}
+
+function addScAction(){
+  var wrap = document.getElementById('scActionRows');
+  var row = document.createElement('div');
+  row.className = 'sc-action';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:10px;';
+  row.innerHTML =
+      '<div><div class="field-label">Task</div><input type="text" class="sc-task" placeholder="Task description"/></div>'
+    + '<div><div class="field-label">Responsible</div><input type="text" class="sc-who" placeholder="Name"/></div>'
+    + '<div><div class="field-label">Due</div><input type="date" class="sc-due"/></div>'
+    + '<button class="btn-d" onclick="this.parentNode.remove()" title="Remove">x</button>';
+  wrap.appendChild(row);
+}
+
+function collectScActions(){
+  var out = [];
+  document.querySelectorAll('#scActionRows .sc-action').forEach(function(r){
+    var t = r.querySelector('.sc-task').value.trim();
+    var w = r.querySelector('.sc-who').value.trim();
+    var d = r.querySelector('.sc-due').value;
+    if(t) out.push({task:t, who:w, due:d});
+  });
+  return out;
+}
+
+function saveScNote(){
+  var idx = g('scChild');
+  if(idx === '') return showError('scError','Please select a child.');
+  if(!g('scDate')) return showError('scError','Please enter the date of service.');
+  if(!g('scStart') || !g('scEnd')) return showError('scError','Please enter start and end times.');
+  var activity = g('scActivity');
+  if(!activity) return showError('scError','Please select an activity type.');
+  if(activity === 'Other' && !g('scActivityOther')) return showError('scError','Please describe the activity.');
+  if(!g('scSummary')) return showError('scError','Please enter a summary of the activity.');
+  if(!g('scSig')) return showError('scError','Please sign the note.');
+
+  function mins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
+  var dur = mins(g('scEnd')) - mins(g('scStart'));
+  if(dur <= 0) return showError('scError','End time must be after start time.');
+
+  var c = children[parseInt(idx)];
+  var note = {
+    id: 'sc'+Date.now(),
+    childName: c.name, childDOB: c.dob||'', childEI: c.ei||'',
+    authCode: c.authCode||'',
+    scName: g('scName'), role: g('scRole'),
+    date: g('scDate'), start: g('scStart'), end: g('scEnd'),
+    mins: dur, units: Math.round(dur/15),
+    activity: activity === 'Other' ? g('scActivityOther') : activity,
+    summary: g('scSummary'),
+    person: g('scPerson'), relation: g('scRelation'),
+    method: g('scMethod'), purpose: g('scPurpose'),
+    ifsp: g('scIFSP'),
+    actions: collectScActions(),
+    sig: g('scSig'),
+    savedAt: new Date().toLocaleString(),
+    billed: false
+  };
+  var arr = scLoad(); arr.unshift(note); scSave(arr);
+
+  clearError('scError');
+  showBadge('scBadge');
+  // Reset the entry fields but keep coordinator identity for the next note
+  ['scStart','scEnd','scActivityOther','scSummary','scPerson','scRelation','scPurpose','scIFSP'].forEach(function(id){ s(id,''); });
+  s('scActivity',''); s('scMethod','');
+  onScActivityChange();
+  document.getElementById('scActionRows').innerHTML = '';
+  addScAction();
+  calcScDuration();
+  renderScNotes();
+}
+
+function renderScNotes(){
+  var arr = scLoad();
+  var list = document.getElementById('scList');
+  var empty = document.getElementById('scEmpty');
+  if(!list) return;
+  if(!arr.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  var html = '';
+  arr.forEach(function(n){
+    html += '<div class="note-card" onclick="toggleNoteDetail(\'scd-'+n.id+'\')">'
+      + '<div class="note-card-top"><div class="note-card-name">'+n.childName+'</div><div class="note-card-date">'+n.date+'</div></div>'
+      + '<div class="note-card-meta">'+n.activity+' · '+n.mins+' min · '+n.units+' unit'+(n.units===1?'':'s')+' · T1017</div>'
+      + '<div class="note-card-preview">'+n.summary+'</div>'
+      + '<div class="note-detail" id="scd-'+n.id+'">'
+        + scDetailRow('Service Coordinator', n.scName+(n.role?' — '+n.role:''))
+        + scDetailRow('Time', n.start+' – '+n.end+' ('+n.mins+' min, '+n.units+' unit'+(n.units===1?'':'s')+')')
+        + scDetailRow('Activity', n.activity)
+        + scDetailRow('Summary', n.summary)
+        + (n.person ? scDetailRow('Contacted', n.person+(n.relation?' ('+n.relation+')':'')+(n.method?' · '+n.method:'')) : '')
+        + (n.purpose ? scDetailRow('Purpose of Contact', n.purpose) : '')
+        + (n.ifsp ? scDetailRow('IFSP Connection', n.ifsp) : '')
+        + (n.actions && n.actions.length ? scDetailRow('Follow-Up', n.actions.map(function(a){
+            return '• '+a.task+(a.who?' — '+a.who:'')+(a.due?' (due '+a.due+')':'');
+          }).join('<br>')) : '')
+        + scDetailRow('Signature', '/s/ '+n.sig+' · '+n.savedAt)
+        + '<div style="display:flex;gap:8px;margin-top:12px;">'
+        + '<button class="btn-s" onclick="event.stopPropagation();printScNote(\''+n.id+'\')">Print</button>'
+        + '<button class="btn-d" onclick="deleteScNote(\''+n.id+'\',event)">Delete</button>'
+        + '</div>'
+      + '</div>'
+      + '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function scDetailRow(label, val){
+  return '<div style="margin-bottom:10px;"><div class="field-label">'+label+'</div>'
+    + '<div style="font-size:.84rem;line-height:1.5;white-space:pre-wrap;">'+(val||'—')+'</div></div>';
+}
+
+function deleteScNote(id, e){
+  e.stopPropagation();
+  if(!confirm('Delete this service coordination note?')) return;
+  scSave(scLoad().filter(function(n){ return n.id !== id; }));
+  renderScNotes();
+}
+
+function printScNote(id){
+  var n = scLoad().filter(function(x){ return x.id === id; })[0];
+  if(!n) return;
+  function esc(t){ return (t||'—').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function row(l,v){ return '<tr><td class="l">'+l+'</td><td>'+esc(v)+'</td></tr>'; }
+  var acts = (n.actions||[]).map(function(a){
+    return esc(a.task)+(a.who?' — Responsible: '+esc(a.who):'')+(a.due?' — Due: '+esc(a.due):'');
+  }).join('<br>');
+  var html = '<html><head><title>SC Note — '+esc(n.childName)+' '+esc(n.date)+'</title><style>'
+    + 'body{font-family:Arial,sans-serif;font-size:.82rem;margin:24px;color:#000;}'
+    + 'h1{font-size:1rem;text-align:center;border-bottom:2px solid #000;padding-bottom:6px;}'
+    + 'h2{font-size:.82rem;margin:16px 0 4px;background:#eee;padding:4px 6px;}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:6px;}'
+    + 'td{border:1px solid #999;padding:4px 6px;vertical-align:top;}'
+    + 'td.l{width:190px;font-weight:bold;background:#f5f5f5;}'
+    + '@media print{button{display:none;}}'
+    + '</style></head><body>'
+    + '<h1>EARLY INTERVENTION SERVICE COORDINATION NOTE</h1>'
+    + '<h2>Child Information</h2><table>'
+    + row('Child Name', n.childName) + row('Date of Birth', n.childDOB)
+    + row('EI #', n.childEI) + row('Service Coordinator', n.scName)
+    + row('Role', n.role) + row('Date of Service', n.date) + '</table>'
+    + '<h2>Time &amp; Duration</h2><table>'
+    + row('Start Time', n.start) + row('End Time', n.end)
+    + row('Total Minutes', String(n.mins))
+    + row('Billable Units (T1017)', String(n.units)) + '</table>'
+    + '<h2>1 · Service Coordination Activity Performed</h2><table>'
+    + row('Activity Type', n.activity) + row('Summary of Activity', n.summary) + '</table>'
+    + '<h2>2 · Contact Details</h2><table>'
+    + row('Person Contacted', n.person) + row('Relationship / Role', n.relation)
+    + row('Contact Method', n.method) + row('Purpose of Contact', n.purpose) + '</table>'
+    + '<h2>3 · IFSP Implementation Connection</h2><table>'
+    + row('', n.ifsp) + '</table>'
+    + '<h2>4 · Follow-Up / Next Steps</h2><table>'
+    + '<tr><td>'+(acts||'—')+'</td></tr></table>'
+    + '<h2>Authorization</h2><table>'
+    + row('Service Coordinator Signature', '/s/ '+n.sig)
+    + row('Date Note Created', n.savedAt)
+    + row('Service Authorization #', n.authCode) + '</table>'
+    + '<button onclick="window.print()" style="margin-top:14px;padding:8px 16px;">Print</button>'
+    + '</body></html>';
+  var w = window.open('','_blank');
+  w.document.write(html); w.document.close();
+}
+
 // ── HELPERS ───────────────────────────────────────────────────
 function g(id){ var e=document.getElementById(id); return e?e.value.trim():''; }
 function s(id,val){ var e=document.getElementById(id); if(e&&val!==undefined)e.value=val||''; }
@@ -2601,7 +2954,7 @@ function editDraftNote(noteId){
   if(!note) return alert('Note not found.');
 
   // Switch to Note tab and go to Step 5
-  showPage('note', document.querySelectorAll('.nav-strip-tab')[0]);
+  showPage('note');
   currentStep = 5;
   updateStepUI();
 
