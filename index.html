@@ -2741,7 +2741,14 @@ function renderBillingSession(){
       + '<div style="font-weight:600;">'+n.sessDate+billedBadge+'</div>'
       + '<div style="font-family:var(--mono);font-size:.7rem;color:var(--primary);">'+units+' units · $'+amount+'</div>'
       + '</div>'
-      + '<div style="color:var(--muted);font-size:.76rem;">Time: '+timeStr+' · CPT: '+cptCode+' · Visit: '+visitType+' · POS: '+placeOfSvc+'</div>'
+      + '<div style="color:var(--muted);font-size:.76rem;">Time: '+timeStr+' · CPT: '+cptCode+' · Visit: '+visitType+' · POS: '+placeOfSvc
+      + ' · '+(rt?rt.unitMin:15)+' min/unit @ $'+(rt?rt.rate.toFixed(2):'0.00')+'</div>'
+      // A code with no row of its own is priced by the catch-all, which is
+      // wrong whenever that service uses a different unit length or rate.
+      + (rt && rt.code === '*'
+          ? '<div style="margin-top:6px;background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:6px;padding:6px 8px;font-size:.72rem;color:#b45309;">'
+            + 'No rate set for '+cptCode+' — using the default. Add it below if this service has its own rate or unit length.</div>'
+          : '')
       + '</div>';
   });
   document.getElementById('billSessionRows').innerHTML = rows;
