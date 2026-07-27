@@ -3053,13 +3053,26 @@ var editRateId = null;
 function ratesLoad(){ return JSON.parse(localStorage.getItem('ei_rates_v4')||'[]'); }
 function ratesSave(a){ localStorage.setItem('ei_rates_v4', JSON.stringify(a)); }
 
+// Adds any known code that is not already present, leaving existing rows
+// alone, so a rate added in a later release appears without re-entering
+// everything. Rates and modifiers should still be checked against the
+// current NYS schedule, which varies by region.
 function seedRates(){
-  if(ratesLoad().length) return;
-  ratesSave([
-    {id:uid('rt'), code:'*',     rate:27.84, mod:'96', unitMin:15, desc:'Default for unlisted codes — verify against your rate schedule'},
-    {id:uid('rt'), code:'T1017', rate:19.09, mod:'',   unitMin:15, desc:'Service coordination, per 15 minutes'},
-    {id:uid('rt'), code:'97155', rate:27.84, mod:'96', unitMin:15, desc:'Special Instruction — $111.35/hr'}
-  ]);
+  var arr = ratesLoad();
+  var known = [
+    {code:'*',     rate:27.84, mod:'96', unitMin:15, desc:'Default for unlisted codes — verify against your rate schedule'},
+    {code:'T1017', rate:19.09, mod:'',   unitMin:15, desc:'Service coordination — $76.36/hr'},
+    {code:'97155', rate:27.84, mod:'96', unitMin:15, desc:'Special Instruction — $111.35/hr'},
+    {code:'92507', rate:83.78, mod:'96', unitMin:30, desc:'Speech-language therapy — $167.56/hr'}
+  ];
+  var added = false;
+  known.forEach(function(k){
+    var exists = arr.filter(function(r){ return (r.code||'').toUpperCase() === k.code; }).length;
+    if(exists) return;
+    arr.push({id:uid('rt'), code:k.code, rate:k.rate, mod:k.mod, unitMin:k.unitMin, desc:k.desc});
+    added = true;
+  });
+  if(added) ratesSave(arr);
 }
 
 // Returns {rate, mod, code} or null when nothing covers the code.
