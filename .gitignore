@@ -1,0 +1,6 @@
+*.docx
+*.pdf
+node_modules/
+.env
+.netlify/
+.claude/
