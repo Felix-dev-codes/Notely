@@ -249,133 +249,99 @@
 
     /* ── DESKTOP LAYOUT ─────────────────────────────────────── */
     @media (min-width: 900px) {
-      body { padding: 0; align-items: stretch; background: #e8edf2; }
-      
+      /* Full-width shell instead of a centered phone-width card */
+      body { padding: 0; justify-content: flex-start; background: #e8edf2; }
+
       .app {
-        max-width: 100%;
+        max-width: none;
         width: 100%;
-        display: grid;
-        grid-template-columns: 220px 1fr;
-        grid-template-rows: 60px 1fr;
         min-height: 100vh;
         background: transparent;
+        overflow: visible;
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
       }
 
-      /* Desktop top bar */
-      .topbar {
-        grid-column: 1 / -1;
-        grid-row: 1;
-        padding: 0 24px;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        position: sticky;
-        top: 0;
-        z-index: 200;
-        border-radius: 0;
-      }
-      .topbar-row1 { flex: 1; margin-bottom: 0; }
-      .progress-bar { display: none; }
-      .topbar-title { font-size: 1rem; margin-bottom: 0; }
-      .topbar-step { font-size: .72rem; }
-
-      /* Desktop sidebar nav */
+      /* The tab strip becomes a sticky left sidebar */
       .nav-strip {
         grid-column: 1;
-        grid-row: 2;
+        grid-row: 1;
         flex-direction: column;
-        border-bottom: none;
-        border-right: 2px solid var(--border);
-        background: var(--white);
-        padding: 16px 0;
+        align-items: stretch;
         gap: 2px;
+        padding: 18px 0;
+        background: var(--white);
+        border-bottom: none;
+        border-right: 1px solid var(--border);
         position: sticky;
-        top: 60px;
-        height: calc(100vh - 60px);
+        top: 0;
+        height: 100vh;
         overflow-y: auto;
       }
       .nav-strip-tab {
         flex: none;
-        text-align: left;
-        padding: 12px 20px;
-        font-size: .82rem;
-        border-bottom: none;
-        border-left: 3px solid transparent;
-        border-radius: 0;
-        margin-bottom: 0;
         display: flex;
         align-items: center;
-        gap: 8px;
+        text-align: left;
+        font-size: .85rem;
+        padding: 12px 20px;
+        margin-bottom: 0;
+        border-bottom: none;
+        border-left: 3px solid transparent;
       }
+      .nav-strip-tab:hover { background: var(--light); color: var(--text); }
       .nav-strip-tab.active {
+        color: var(--primary);
+        background: var(--primary-glow);
         border-bottom-color: transparent;
         border-left-color: var(--primary);
-        background: var(--primary-glow);
-        color: var(--primary);
       }
 
-      /* Desktop main content */
-      .pages-wrap {
+      /* Each page is a card in the right column. Inactive pages keep
+         display:none, so only the active one occupies the grid cell. */
+      .page {
         grid-column: 2;
-        grid-row: 2;
-        background: #e8edf2;
-        padding: 24px;
-        overflow-y: auto;
-        height: calc(100vh - 60px);
-      }
-
-      .page { background: var(--white); border-radius: 12px; padding: 24px; max-width: 900px; margin: 0 auto; }
-
-      /* Step content wider */
-      .step-content { padding: 24px 28px; max-width: 760px; margin: 0 auto; }
-
-      /* Two column grids on desktop */
-      .g2 { grid-template-columns: 1fr 1fr; gap: 16px; }
-
-      /* Note flow panel */
-      .note-panel {
+        grid-row: 1;
+        width: 100%;
+        max-width: 920px;
+        margin: 28px auto 44px;
         background: var(--white);
-        border-radius: 12px;
-        max-width: 900px;
-        margin: 0 auto;
-        overflow: hidden;
+        border-radius: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,.07);
       }
 
-      /* Wider step nav bottom bar */
-      .step-nav {
-        padding: 16px 28px;
+      /* Note-flow header sits flush in the top of the card */
+      .topbar { padding: 18px 28px 0; border-radius: 14px 14px 0 0; }
+      .topbar-title { font-size: 1.25rem; }
+      .topbar-step { font-size: .78rem; }
+
+      /* Roomier content padding */
+      .step-content { padding: 26px 30px 32px; }
+      .inner-pad { padding: 26px 30px 32px; }
+      #page-billing { padding: 26px 30px 32px; }
+
+      /* Back/Next stop being pinned to a phantom 480px column */
+      .bottom-nav {
         position: sticky;
         bottom: 0;
-        background: var(--white);
-        border-top: 1px solid var(--border);
-        display: flex;
-        gap: 12px;
-        justify-content: space-between;
+        left: auto;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        padding: 14px 30px;
+        border-radius: 0 0 14px 14px;
       }
 
-      /* Wider buttons */
-      .btn-p { max-width: 300px; }
-
-      /* Service log table wider */
+      /* Use the extra width */
+      .g2 { gap: 18px; }
+      .btn-p { max-width: 320px; }
+      .ccard { padding: 14px 16px; }
       .slog-row { padding: 16px; }
-
-      /* History grid */
-      .hist-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      .hist-card { margin-bottom: 0; }
-
-      /* Children grid */
-      .child-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      .child-card { margin-bottom: 0; }
-
-      /* Billing wider */
-      #page-billing { max-width: 900px; }
     }
 
-    @media (min-width: 1200px) {
-      .app { grid-template-columns: 240px 1fr; }
-      .page { max-width: 1000px; }
-      .step-content { max-width: 860px; }
-      .hist-list { grid-template-columns: 1fr 1fr 1fr; }
+    @media (min-width: 1280px) {
+      .app { grid-template-columns: 260px minmax(0, 1fr); }
+      .page { max-width: 1040px; }
     }
     /* ── END DESKTOP ──────────────────────────────────────────── */
 
@@ -1275,12 +1241,14 @@ function onHipaaCheck(){
 function acceptHipaa(){
   localStorage.setItem('ei_hipaa_accepted','true');
   document.getElementById('hipaaGate').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
+  // Clear the inline display so the stylesheet decides: block on mobile,
+  // grid on desktop. Setting it explicitly would override the media query.
+  document.getElementById('mainApp').style.removeProperty('display');
 }
 function checkHipaa(){
   if(localStorage.getItem('ei_hipaa_accepted') === 'true'){
     document.getElementById('hipaaGate').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
+    document.getElementById('mainApp').style.removeProperty('display');
   }
 }
 
