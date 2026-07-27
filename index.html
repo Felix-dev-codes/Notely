@@ -32,7 +32,7 @@
     /* NAV TABS for Profile/Children */
     /* Wraps to two rows on phones so every tab stays reachable */
     .nav-strip{display:flex;flex-wrap:wrap;border-bottom:2px solid var(--border);background:var(--white);}
-    .nav-strip-tab{flex:1 0 25%;text-align:center;padding:12px 4px;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;transition:all .2s;}
+    .nav-strip-tab{flex:0 0 25%;text-align:center;padding:12px 4px;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;transition:all .2s;}
     .nav-strip-tab.active{color:var(--primary);border-bottom-color:var(--primary);}
 
     /* PAGES */
@@ -158,6 +158,22 @@
     .hipaa-btn.ready{opacity:1;}
     .hipaa-version{font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-top:14px;}
 
+    /* USER / ROLE SELECT */
+    .login-gate{position:fixed;inset:0;background:#fff;z-index:9998;display:none;flex-direction:column;justify-content:center;align-items:center;padding:28px 24px;max-width:480px;margin:0 auto;overflow-y:auto;}
+    .login-gate.show{display:flex;}
+    .user-pick{width:100%;background:var(--light);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;transition:border-color .15s;}
+    .user-pick:hover{border-color:var(--primary);}
+    .user-pick-name{font-weight:700;font-size:.92rem;}
+    .user-pick-meta{font-size:.7rem;color:var(--muted);font-family:var(--mono);margin-top:2px;}
+    .role-badge{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+    .role-admin{background:rgba(29,78,216,.1);border:1px solid #1d4ed8;color:#1d4ed8;}
+    .role-therapist{background:var(--primary-glow);border:1px solid var(--primary);color:var(--primary);}
+    .role-coordinator{background:rgba(245,158,11,.12);border:1px solid #f59e0b;color:#b45309;}
+    /* Bar showing who is acting, with a way to switch */
+    .whoami{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--light);border-bottom:1px solid var(--border);padding:8px 16px;font-size:.76rem;}
+    .whoami b{font-size:.8rem;}
+    .ucard{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+
     /* NOTES HISTORY */
     .note-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:8px;cursor:pointer;transition:border-color .15s;}
     .note-card:hover{border-color:var(--primary);}
@@ -261,12 +277,16 @@
         overflow: visible;
         display: grid;
         grid-template-columns: 240px minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
       }
+
+      /* Active-user bar spans the full width above sidebar and content */
+      .whoami { grid-column: 1 / -1; grid-row: 1; padding: 10px 24px; }
 
       /* The tab strip becomes a sticky left sidebar */
       .nav-strip {
         grid-column: 1;
-        grid-row: 1;
+        grid-row: 2;
         flex-direction: column;
         flex-wrap: nowrap;
         align-items: stretch;
@@ -303,7 +323,7 @@
          display:none, so only the active one occupies the grid cell. */
       .page {
         grid-column: 2;
-        grid-row: 1;
+        grid-row: 2;
         width: 100%;
         max-width: 920px;
         margin: 28px auto 44px;
@@ -372,11 +392,30 @@
   <div class="hipaa-version">v4.0 · NYC EI Individual Session Note 6/13/2025</div>
 </div>
 
+<!-- ══════════ USER SELECT ══════════ -->
+<div class="login-gate" id="loginGate">
+  <div class="hipaa-title">Who is using Notely?</div>
+  <div class="hipaa-subtitle">Select your name to continue</div>
+  <div id="loginList" style="width:100%;"></div>
+  <div class="ibox" style="margin-top:14px;font-size:.74rem;">
+    This selects which staff member notes are recorded under. It is a role
+    selector on this device — not a secure login — so it must not be relied on
+    to keep records private between staff.
+  </div>
+</div>
+
 <div class="app" id="mainApp" style="display:none;">
+
+  <!-- ACTIVE USER BAR -->
+  <div class="whoami" id="whoamiBar" style="display:none;">
+    <div>Working as <b id="whoamiName">—</b> <span class="role-badge" id="whoamiRole">—</span></div>
+    <button class="btn-s" onclick="logoutUser()" style="font-size:.7rem;">Switch User</button>
+  </div>
 
   <!-- TOP STRIP NAV (Profile / Children / Note) -->
   <div class="nav-strip" id="mainNav">
     <div class="nav-strip-tab active" onclick="showPage('note',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>Note</div>
+    <div class="nav-strip-tab" data-role="admin" onclick="showPage('users',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/></svg></span>Staff</div>
     <div class="nav-strip-tab" onclick="showPage('sc',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>SC Note</div>
     <div class="nav-strip-tab" onclick="showPage('children',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Children</div>
     <div class="nav-strip-tab" onclick="showPage('profile',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>Profile</div>
@@ -1101,6 +1140,74 @@
     </div>
   </div>
 
+  <!-- ══════════ STAFF / USERS PAGE (admin only) ══════════ -->
+  <div class="page" id="page-users">
+    <div class="inner-pad">
+      <div class="slabel" style="margin-top:8px;">Agency Staff</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;line-height:1.5;">Add therapists and service coordinators once here. Their name, NPI and credentials then fill in automatically on every note they write.</div>
+
+      <div class="sec-header" style="margin-bottom:12px;" id="uFormLbl">Add Staff Member</div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">First Name</div>
+          <input type="text" id="uFirst" placeholder="e.g. Maria"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Last Name</div>
+          <input type="text" id="uLast" placeholder="e.g. Reyes"/>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Role</div>
+          <select id="uRole">
+            <option value="therapist">Therapist / Provider</option>
+            <option value="coordinator">Service Coordinator</option>
+            <option value="admin">Agency Admin</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <div class="field-label">NPI #</div>
+          <input type="text" id="uNPI" placeholder="10-digit NPI"/>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Discipline / Credential</div>
+          <input type="text" id="uCred" placeholder="e.g. PT, OT, SLP, MSW"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">License #</div>
+          <input type="text" id="uLic" placeholder="License number"/>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="field-group">
+          <div class="field-label">Agency</div>
+          <input type="text" id="uAgency" placeholder="Agency name"/>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Tax ID</div>
+          <input type="text" id="uTaxID" placeholder="Tax ID"/>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Business Address</div>
+        <input type="text" id="uAddress" placeholder="Street, City, State ZIP"/>
+      </div>
+
+      <div class="val-error" id="uError"></div>
+      <button class="btn-p" onclick="saveUser()"><span id="uSaveTxt">Add Staff Member</span></button>
+      <button class="btn-s" id="uCancelBtn" onclick="cancelUserEdit()" style="margin-top:8px;display:none;">Cancel Edit</button>
+      <div class="sbadge" id="uBadge">Saved</div>
+
+      <div class="div" style="margin-top:24px;"></div>
+      <div class="slabel">Staff List</div>
+      <div id="uEmpty" class="ibox">No staff added yet.</div>
+      <div id="uList"></div>
+    </div>
+  </div>
+
   <!-- ══════════ SERVICE COORDINATION NOTE PAGE ══════════ -->
   <div class="page" id="page-sc">
     <div class="inner-pad">
@@ -1377,11 +1484,13 @@ function acceptHipaa(){
   // Clear the inline display so the stylesheet decides: block on mobile,
   // grid on desktop. Setting it explicitly would override the media query.
   document.getElementById('mainApp').style.removeProperty('display');
+  initUsers();
 }
 function checkHipaa(){
   if(localStorage.getItem('ei_hipaa_accepted') === 'true'){
     document.getElementById('hipaaGate').style.display = 'none';
     document.getElementById('mainApp').style.removeProperty('display');
+    initUsers();
   }
 }
 
@@ -1402,6 +1511,7 @@ function showPage(page, el){
   if(page === 'servicelog'){ renderSlogChildSel(); renderServiceLog(); }
   if(page === 'billing'){ renderBillingChildSel(); }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
+  if(page === 'users'){ renderUsers(); }
 }
 
 // ── STEP NAV ──────────────────────────────────────────────────
@@ -2634,6 +2744,186 @@ function copyBlk(id, btn){
   });
 }
 
+// ── STAFF / ROLES ─────────────────────────────────────────────
+// Local role selection only. This is NOT authentication: everything lives in
+// this browser and anyone with the device can switch users. It exists to shape
+// the UI per role and stamp notes with an author. Real access control has to
+// come from a server when this moves off localStorage.
+var ROLE_LABELS = {admin:'Agency Admin', therapist:'Therapist', coordinator:'Service Coordinator'};
+// Which tabs each role may open. Admin sees everything.
+var ROLE_TABS = {
+  admin:       ['note','sc','users','children','profile','history','attendance','servicelog','billing'],
+  therapist:   ['note','children','profile','history','attendance','servicelog','billing'],
+  coordinator: ['sc','children','profile','history','billing']
+};
+var activeUser = null;
+var editUserId = null;
+
+function usersLoad(){ return JSON.parse(localStorage.getItem('ei_users_v4')||'[]'); }
+function usersSave(a){ localStorage.setItem('ei_users_v4', JSON.stringify(a)); }
+function userFullName(u){ return ((u.firstName||'')+' '+(u.lastName||'')).trim(); }
+
+function saveUser(){
+  if(!g('uFirst') || !g('uLast')) return showError('uError','First and last name are required.');
+  var arr = usersLoad();
+  var rec = {
+    id: editUserId || uid('u'),
+    firstName:g('uFirst'), lastName:g('uLast'), role:g('uRole')||'therapist',
+    npi:g('uNPI'), cred:g('uCred'), lic:g('uLic'),
+    agency:g('uAgency'), taxId:g('uTaxID'), address:g('uAddress')
+  };
+  if(editUserId){
+    for(var i=0;i<arr.length;i++){ if(arr[i].id===editUserId){ rec.children = arr[i].children||[]; arr[i]=rec; break; } }
+  } else {
+    rec.children = [];
+    arr.push(rec);
+  }
+  usersSave(arr);
+  // Keep the acting user's details in sync if they just edited themselves
+  if(activeUser && activeUser.id === rec.id) applyActiveUser(rec);
+  clearError('uError');
+  showBadge('uBadge');
+  cancelUserEdit();
+  renderUsers();
+}
+
+function editUser(id){
+  var u = usersLoad().filter(function(x){ return x.id===id; })[0];
+  if(!u) return;
+  editUserId = id;
+  s('uFirst',u.firstName); s('uLast',u.lastName); s('uRole',u.role);
+  s('uNPI',u.npi); s('uCred',u.cred); s('uLic',u.lic);
+  s('uAgency',u.agency); s('uTaxID',u.taxId); s('uAddress',u.address);
+  document.getElementById('uFormLbl').textContent = 'Editing: '+userFullName(u);
+  document.getElementById('uSaveTxt').textContent = 'Update Staff Member';
+  document.getElementById('uCancelBtn').style.display = 'block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function cancelUserEdit(){
+  editUserId = null;
+  ['uFirst','uLast','uNPI','uCred','uLic','uAgency','uTaxID','uAddress'].forEach(function(id){ s(id,''); });
+  s('uRole','therapist');
+  document.getElementById('uFormLbl').textContent = 'Add Staff Member';
+  document.getElementById('uSaveTxt').textContent = 'Add Staff Member';
+  document.getElementById('uCancelBtn').style.display = 'none';
+}
+
+function deleteUser(id){
+  var arr = usersLoad();
+  var u = arr.filter(function(x){ return x.id===id; })[0];
+  if(!u) return;
+  if(activeUser && activeUser.id === id) return alert('You are currently working as this staff member. Switch user first.');
+  if(!confirm('Remove '+userFullName(u)+'? Notes they already saved are kept.')) return;
+  usersSave(arr.filter(function(x){ return x.id!==id; }));
+  renderUsers();
+}
+
+function renderUsers(){
+  var list = document.getElementById('uList');
+  var empty = document.getElementById('uEmpty');
+  if(!list) return;
+  var arr = usersLoad();
+  if(!arr.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  list.innerHTML = arr.map(function(u){
+    return '<div class="ucard">'
+      + '<div><div class="cname">'+userFullName(u)+'</div>'
+      + '<div class="cmeta">'+(u.cred||'—')+(u.npi?' · NPI: '+u.npi:'')+(u.agency?' · '+u.agency:'')+'</div></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'
+      + '<span class="role-badge role-'+u.role+'">'+ROLE_LABELS[u.role]+'</span>'
+      + '<button class="btn-s" onclick="editUser(\''+u.id+'\')">Edit</button>'
+      + '<button class="btn-d" onclick="deleteUser(\''+u.id+'\')">x</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+// ── LOGIN / ROLE GATE ─────────────────────────────────────────
+function renderLoginList(){
+  var arr = usersLoad();
+  document.getElementById('loginList').innerHTML = arr.map(function(u){
+    return '<div class="user-pick" onclick="loginAs(\''+u.id+'\')">'
+      + '<div><div class="user-pick-name">'+userFullName(u)+'</div>'
+      + '<div class="user-pick-meta">'+(u.cred||ROLE_LABELS[u.role])+(u.npi?' · '+u.npi:'')+'</div></div>'
+      + '<span class="role-badge role-'+u.role+'">'+ROLE_LABELS[u.role]+'</span>'
+      + '</div>';
+  }).join('');
+}
+
+function loginAs(id){
+  var u = usersLoad().filter(function(x){ return x.id===id; })[0];
+  if(!u) return;
+  localStorage.setItem('ei_session_v4', JSON.stringify({userId:id}));
+  applyActiveUser(u);
+  document.getElementById('loginGate').classList.remove('show');
+  document.getElementById('mainApp').style.removeProperty('display');
+}
+
+function logoutUser(){
+  localStorage.removeItem('ei_session_v4');
+  activeUser = null;
+  document.getElementById('mainApp').style.display = 'none';
+  renderLoginList();
+  document.getElementById('loginGate').classList.add('show');
+}
+
+// Point the existing single-provider `profile` at whoever is acting, so notes,
+// the service log and the 837P keep reading from one place.
+function applyActiveUser(u){
+  activeUser = u;
+  profile = {
+    name: userFullName(u), cred:u.cred||'', npi:u.npi||'', lic:u.lic||'',
+    taxId:u.taxId||'', address:u.address||'', agency:u.agency||'',
+    progId:(profile&&profile.progId)||'', type:(profile&&profile.type)||''
+  };
+  localStorage.setItem('ei_p4', JSON.stringify(profile));
+  loadProfileForm();
+  // Re-stamp the SC form for the new user, otherwise a switched-to user would
+  // author notes under the previous person's name.
+  var scn = document.getElementById('scName');
+  if(scn) scn.value = userFullName(u);
+  document.getElementById('whoamiName').textContent = userFullName(u);
+  var rb = document.getElementById('whoamiRole');
+  rb.textContent = ROLE_LABELS[u.role];
+  rb.className = 'role-badge role-'+u.role;
+  document.getElementById('whoamiBar').style.removeProperty('display');
+  applyRoleTabs(u.role);
+}
+
+function applyRoleTabs(role){
+  var allowed = ROLE_TABS[role] || ROLE_TABS.therapist;
+  document.querySelectorAll('.nav-strip-tab').forEach(function(t){
+    var m = (t.getAttribute('onclick')||'').match(/showPage\('([a-z]+)'/);
+    var page = m ? m[1] : '';
+    t.style.display = allowed.indexOf(page) === -1 ? 'none' : '';
+  });
+  // If the open page is no longer permitted, fall back to the first allowed one
+  var cur = document.querySelector('.page.active');
+  var curPage = cur ? cur.id.replace('page-','') : '';
+  if(allowed.indexOf(curPage) === -1) showPage(allowed[0]);
+}
+
+// Runs after the HIPAA gate clears. With no staff defined the app behaves
+// exactly as it did before roles existed, so existing single-user installs
+// are untouched until an admin adds staff.
+function initUsers(){
+  var arr = usersLoad();
+  if(!arr.length){
+    document.getElementById('whoamiBar').style.display = 'none';
+    renderUsers();
+    return;
+  }
+  var sess = JSON.parse(localStorage.getItem('ei_session_v4')||'null');
+  var u = sess ? arr.filter(function(x){ return x.id===sess.userId; })[0] : null;
+  if(u){ applyActiveUser(u); }
+  else {
+    document.getElementById('mainApp').style.display = 'none';
+    renderLoginList();
+    document.getElementById('loginGate').classList.add('show');
+  }
+  renderUsers();
+}
+
 // ── SERVICE COORDINATION NOTES ────────────────────────────────
 // SC activity bills as T1017 in 15-minute units. Per the NYS EI-Hub 837P
 // Companion Guide v5.0.0, SC uses Loop 2400 NTE (HHMM-HHMM, no visit-type
@@ -2723,7 +3013,7 @@ function saveScNote(){
 
   var c = children[parseInt(idx)];
   var note = {
-    id: 'sc'+Date.now(),
+    id: uid('sc'),
     childName: c.name, childDOB: c.dob||'', childEI: c.ei||'',
     authCode: c.authCode||'',
     scName: g('scName'), role: g('scRole'),
@@ -2846,6 +3136,13 @@ function printScNote(id){
 }
 
 // ── HELPERS ───────────────────────────────────────────────────
+// Date.now() alone collides when two records are created in the same
+// millisecond, which silently pointed edit/delete/login at the wrong record.
+var _uidSeq = 0;
+function uid(prefix){
+  _uidSeq = (_uidSeq + 1) % 1e6;
+  return prefix + Date.now().toString(36) + '-' + _uidSeq.toString(36) + '-' + Math.random().toString(36).slice(2,8);
+}
 function g(id){ var e=document.getElementById(id); return e?e.value.trim():''; }
 function s(id,val){ var e=document.getElementById(id); if(e&&val!==undefined)e.value=val||''; }
 function showBadge(id){ var e=document.getElementById(id); e.style.display='inline-block'; setTimeout(function(){ e.style.display='none'; },2500); }
