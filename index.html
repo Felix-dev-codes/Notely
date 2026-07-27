@@ -2690,9 +2690,13 @@ function generate837P(){
   // and must be recorded -- but a claim without a covering physician order is
   // held back here rather than denied later.
   var blocked = [];
+  var referringFor = {};
   childNotes.forEach(function(n){
     var res = checkScriptCoverage(c.name, c.servType||'', n.sessDate);
     if(res.blocked) blocked.push(n.sessDate+' — '+res.reason);
+    // Remember which physician ordered this session so Loop 2310A can name
+    // them as the referring provider rather than the treating therapist.
+    referringFor[n.sessDate] = res.script ? findDoctor(res.script.doctorId) : null;
   });
   if(blocked.length){
     errEl.style.display='block';
@@ -2774,7 +2778,17 @@ function generate837P(){
     seg.push('REF*EA*'+childEI);
     seg.push('NTE*ADD*'+visitType+'-'+toHHMM(startRaw)+'-'+toHHMM(endRaw));
     seg.push('HI*ABK:'+icd);
-    seg.push('NM1*DN*1*'+provLast+'*'+provFirst+'****XX*'+npi);
+    // Loop 2310A — referring provider is the ordering physician from the
+    // script, not the treating therapist. Falls back to the rendering provider
+    // only for script-exempt services, which still needs a proper county/EIO
+    // NPI before those are billed.
+    var refDoc = referringFor[n.sessDate];
+    if(refDoc){
+      seg.push('NM1*DN*1*'+(refDoc.lastName||'').toUpperCase()+'*'+(refDoc.firstName||'').toUpperCase()+'****XX*'+refDoc.npi);
+    } else {
+      seg.push('NM1*DN*1*'+provLast+'*'+provFirst+'****XX*'+npi);
+    }
+    // Loop 2310B — rendering provider is the clinician who delivered the service
     seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
     seg.push('LX*1');
     seg.push('SV1*HC:'+cptCode+':96*'+amount+'*UN*'+units+'***1');
