@@ -1544,6 +1544,14 @@
       </div>
       <div class="g2">
         <div class="field-group">
+          <div class="field-label">Minutes Per Unit</div>
+          <select id="rateUnitMin">
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">60 minutes</option>
+          </select>
+        </div>
+        <div class="field-group">
           <div class="field-label">Modifier <span style="color:var(--muted);font-weight:400;">(blank for none)</span></div>
           <input type="text" id="rateMod" placeholder="e.g. 96"/>
         </div>
@@ -2722,8 +2730,8 @@ function renderBillingSession(){
     var placeOfSvc = pos ? pos[1].trim().split(' ')[0] : '12';
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length === 2 ? toMins(parts[1].trim()) - toMins(parts[0].trim()) : 0;
-    var units = mins > 0 ? Math.round(mins/15) : 0;
     var rt = getRate(cptCode);
+    var units = calcUnits(mins, rt ? rt.unitMin : 15);
     var amount = rt ? (units * rt.rate).toFixed(2) : '0.00';
     totalUnits += units;
     totalAmount += parseFloat(amount);
@@ -2859,12 +2867,12 @@ function generate837P(){
     function toHHMM(t){ var m=t.match(/(\d+):(\d+)/); if(!m)return'0800'; return ('0'+m[1]).slice(-2)+('0'+m[2]).slice(-2); }
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length===2 ? toMins(endRaw)-toMins(startRaw) : 60;
-    var units = mins>0 ? Math.round(mins/15) : 4;
     var cptM = n.header.match(/CPT: ([^\n]+)/);
     var cptCode = cptM ? cptM[1].trim().split(' ')[0] : '97155';
     // Must come after cptCode is known, or every line silently prices at the
     // default rate and modifier.
     var rt = getRate(cptCode);
+    var units = calcUnits(mins, rt ? rt.unitMin : 15);
     var amount = rt ? (units*rt.rate).toFixed(2) : '0.00';
     var vtM = n.header.match(/Visit Type: ([^\n]+)/);
     var visitType = vtM ? vtM[1].trim() : 'CV1';
@@ -3033,19 +3041,30 @@ function ratesSave(a){ localStorage.setItem('ei_rates_v4', JSON.stringify(a)); }
 function seedRates(){
   if(ratesLoad().length) return;
   ratesSave([
-    {id:uid('rt'), code:'*',     rate:27.84, mod:'96', desc:'Default for unlisted codes — verify against your rate schedule'},
-    {id:uid('rt'), code:'T1017', rate:19.09, mod:'',   desc:'Service coordination, per 15 minutes'}
+    {id:uid('rt'), code:'*',     rate:27.84, mod:'96', unitMin:15, desc:'Default for unlisted codes — verify against your rate schedule'},
+    {id:uid('rt'), code:'T1017', rate:19.09, mod:'',   unitMin:15, desc:'Service coordination, per 15 minutes'}
   ]);
 }
 
 // Returns {rate, mod, code} or null when nothing covers the code.
+// Units billed for a session. Unit length varies by service -- speech bills in
+// 30-minute units, special instruction and service coordination in 15 -- so a
+// fixed mins/15 would double-count any 30-minute service.
+// 10 NYCRR 69-4.30: the first unit covers the initial 5 to 15 minutes and each
+// unit thereafter covers "up to" a further period, so a partial period rounds up.
+function calcUnits(mins, unitMin){
+  unitMin = parseInt(unitMin||15);
+  if(!(mins > 0) || mins < 5) return 0;
+  return Math.ceil(mins/unitMin);
+}
+
 function getRate(code){
   seedRates();
   var arr = ratesLoad();
   var c = (code||'').toUpperCase().trim();
   var hit = arr.filter(function(r){ return r.code.toUpperCase() === c; })[0];
   if(!hit) hit = arr.filter(function(r){ return r.code === '*'; })[0];
-  return hit ? {rate:parseFloat(hit.rate), mod:(hit.mod||''), code:hit.code} : null;
+  return hit ? {rate:parseFloat(hit.rate), mod:(hit.mod||''), unitMin:parseInt(hit.unitMin||15), code:hit.code} : null;
 }
 
 function saveRate(){
@@ -3057,7 +3076,8 @@ function saveRate(){
   var dupe = arr.filter(function(r){ return r.code.toUpperCase()===code && r.id!==editRateId; })[0];
   if(dupe) return showError('rateError','A rate for '+code+' already exists.');
   var rec = {id: editRateId || uid('rt'), code:code, rate:amt,
-             mod:g('rateMod').replace(/[^A-Za-z0-9]/g,''), desc:g('rateDesc')};
+             mod:g('rateMod').replace(/[^A-Za-z0-9]/g,''),
+             unitMin:parseInt(g('rateUnitMin')||'15'), desc:g('rateDesc')};
   if(editRateId){ for(var i=0;i<arr.length;i++){ if(arr[i].id===editRateId){ arr[i]=rec; break; } } }
   else arr.push(rec);
   ratesSave(arr);
@@ -3069,6 +3089,7 @@ function editRate(id){
   var r = ratesLoad().filter(function(x){ return x.id===id; })[0]; if(!r) return;
   editRateId = id;
   s('rateCode',r.code); s('rateAmt',r.rate); s('rateMod',r.mod); s('rateDesc',r.desc);
+  s('rateUnitMin',String(r.unitMin||15));
   document.getElementById('rateSaveTxt').textContent='Update Rate';
   document.getElementById('rateCancelBtn').style.display='block';
 }
@@ -3076,6 +3097,7 @@ function editRate(id){
 function cancelRateEdit(){
   editRateId=null;
   ['rateCode','rateAmt','rateMod','rateDesc'].forEach(function(i){ s(i,''); });
+  s('rateUnitMin','15');
   document.getElementById('rateSaveTxt').textContent='Add Rate';
   document.getElementById('rateCancelBtn').style.display='none';
 }
@@ -3099,7 +3121,8 @@ function renderRates(){
   if(!arr.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
   if(empty) empty.style.display='none';
   list.innerHTML = arr.map(function(r){
-    var label = r.code==='*' ? 'Default (unlisted codes)' : r.code + (r.mod?' · modifier '+r.mod:' · no modifier');
+    var label = (r.code==='*' ? 'Default (unlisted codes)' : r.code + (r.mod?' · modifier '+r.mod:' · no modifier'))
+      + ' · ' + (r.unitMin||15) + ' min/unit';
     return '<div class="ucard"><div><div class="cname">$'+parseFloat(r.rate).toFixed(2)+' <span style="font-weight:400;font-size:.78rem;color:var(--muted);">per unit</span></div>'
       + '<div class="cmeta">'+label+'</div>'
       + (r.desc?'<div class="cmeta">'+r.desc+'</div>':'')+'</div>'
@@ -3519,9 +3542,10 @@ function calcScDuration(){
   function mins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
   var d = mins(en) - mins(st);
   if(d <= 0){ box.innerHTML = '<span style="color:var(--red);font-weight:600;">End time must be after start time.</span>'; return; }
-  var units = Math.round(d/15);
+  var scRate = getRate('T1017');
+  var units = calcUnits(d, scRate ? scRate.unitMin : 15);
   var txt = '<b>'+d+' minutes</b> · T1017 units: <b>'+units+'</b>';
-  if(units === 0) txt += '<br><span style="color:#b45309;">Under 8 minutes rounds to 0 billable units — verify against your billing policy.</span>';
+  if(units === 0) txt += '<br><span style="color:#b45309;">Under 5 minutes is not billable.</span>';
   box.innerHTML = txt;
 }
 
