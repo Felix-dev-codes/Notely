@@ -415,6 +415,7 @@
   <!-- TOP STRIP NAV (Profile / Children / Note) -->
   <div class="nav-strip" id="mainNav">
     <div class="nav-strip-tab active" onclick="showPage('note',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>Note</div>
+    <div class="nav-strip-tab" onclick="showPage('scripts',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15h6"/><path d="M12 12v6"/></svg></span>Scripts</div>
     <div class="nav-strip-tab" data-role="admin" onclick="showPage('users',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/></svg></span>Staff</div>
     <div class="nav-strip-tab" onclick="showPage('sc',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>SC Note</div>
     <div class="nav-strip-tab" onclick="showPage('children',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Children</div>
@@ -461,8 +462,9 @@
 
         <div class="field-group field-divider">
           <div class="field-label">Session Date</div>
-          <input type="date" id="sessDate"/>
+          <input type="date" id="sessDate" onchange="refreshScriptStatus()"/>
         </div>
+        <div id="scriptStatus" class="ibox" style="margin-bottom:18px;display:none;"></div>
         <div class="field-group field-divider">
           <div class="field-label">Time From</div>
           <input type="time" id="timeFrom"/>
@@ -1208,6 +1210,112 @@
     </div>
   </div>
 
+  <!-- ══════════ DOCTOR REGISTRY & SCRIPTS PAGE ══════════ -->
+  <div class="page" id="page-scripts">
+    <div class="inner-pad">
+      <div class="slabel" style="margin-top:8px;">Doctor Scripts &amp; Orders</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;line-height:1.5;">Therapy sessions need a physician order covering the date of service. Sessions without one are flagged before they reach a claim.</div>
+
+      <!-- DOCTOR REGISTRY -->
+      <div class="sec-header" style="margin-bottom:12px;" id="docFormLbl">Doctor Registry</div>
+      <div id="docFormWrap">
+        <div class="g2">
+          <div class="field-group">
+            <div class="field-label">First Name</div>
+            <input type="text" id="docFirst" placeholder="e.g. Jane"/>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Last Name</div>
+            <input type="text" id="docLast" placeholder="e.g. Doe"/>
+          </div>
+        </div>
+        <div class="g2">
+          <div class="field-group">
+            <div class="field-label">NPI # <span style="color:var(--red);">*</span></div>
+            <input type="text" id="docNPI" placeholder="10-digit NPI"/>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Medicaid Provider ID</div>
+            <input type="text" id="docMcaid" placeholder="Optional"/>
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">License #</div>
+          <input type="text" id="docLic" placeholder="Optional"/>
+        </div>
+        <div class="val-error" id="docError"></div>
+        <button class="btn-p" onclick="saveDoctor()"><span id="docSaveTxt">Add Doctor</span></button>
+        <button class="btn-s" id="docCancelBtn" onclick="cancelDoctorEdit()" style="margin-top:8px;display:none;">Cancel Edit</button>
+        <div class="sbadge" id="docBadge">Saved</div>
+      </div>
+      <div id="docEmpty" class="ibox" style="margin-top:12px;">No doctors added yet.</div>
+      <div id="docList" style="margin-top:12px;"></div>
+
+      <div class="div" style="margin-top:24px;"></div>
+
+      <!-- PRESCRIPTIONS -->
+      <div class="sec-header" style="margin-bottom:12px;" id="rxFormLbl">Add Script / Order</div>
+      <div id="rxFormWrap">
+        <div class="field-group">
+          <div class="field-label">Child</div>
+          <select id="rxChild"><option value="">— Select Child —</option></select>
+        </div>
+        <div class="g2">
+          <div class="field-group">
+            <div class="field-label">Ordering Doctor</div>
+            <select id="rxDoctor"><option value="">— Select Doctor —</option></select>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Discipline</div>
+            <select id="rxDiscipline">
+              <option value="">Select...</option>
+              <option>Speech-Language (ST)</option>
+              <option>Occupational Therapy (OT)</option>
+              <option>Physical Therapy (PT)</option>
+              <option>Special Education (SEIT)</option>
+              <option>Developmental Intervention (DI)</option>
+              <option>Special Instruction (SI)</option>
+              <option>ABA</option>
+              <option>Vision</option>
+              <option>Hearing</option>
+              <option>Nutrition</option>
+              <option>Psychology</option>
+            </select>
+          </div>
+        </div>
+        <div class="g2">
+          <div class="field-group">
+            <div class="field-label">ICD-10 Code</div>
+            <input type="text" id="rxICD" placeholder="e.g. F80.2"/>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Reference / Notes</div>
+            <input type="text" id="rxNotes" placeholder="Optional"/>
+          </div>
+        </div>
+        <div class="g2">
+          <div class="field-group">
+            <div class="field-label">Start Date <span style="color:var(--red);">*</span></div>
+            <input type="date" id="rxStart"/>
+          </div>
+          <div class="field-group">
+            <div class="field-label">End Date <span style="color:var(--red);">*</span></div>
+            <input type="date" id="rxEnd"/>
+          </div>
+        </div>
+        <div class="val-error" id="rxError"></div>
+        <button class="btn-p" onclick="saveScript()"><span id="rxSaveTxt">Add Script</span></button>
+        <button class="btn-s" id="rxCancelBtn" onclick="cancelScriptEdit()" style="margin-top:8px;display:none;">Cancel Edit</button>
+        <div class="sbadge" id="rxBadge">Saved</div>
+      </div>
+
+      <div class="div" style="margin-top:24px;"></div>
+      <div class="slabel">Scripts on File</div>
+      <div id="rxEmpty" class="ibox">No scripts on file yet.</div>
+      <div id="rxList"></div>
+    </div>
+  </div>
+
   <!-- ══════════ SERVICE COORDINATION NOTE PAGE ══════════ -->
   <div class="page" id="page-sc">
     <div class="inner-pad">
@@ -1512,6 +1620,12 @@ function showPage(page, el){
   if(page === 'billing'){ renderBillingChildSel(); }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
   if(page === 'users'){ renderUsers(); }
+  if(page === 'scripts'){
+    renderDoctors(); renderRxSelects(); renderScripts();
+    var ed = isAdmin() ? '' : 'none';
+    document.getElementById('docFormWrap').style.display = ed;
+    document.getElementById('rxFormWrap').style.display = ed;
+  }
 }
 
 // ── STEP NAV ──────────────────────────────────────────────────
@@ -1821,7 +1935,36 @@ function renderChildSel(){
   renderSlogChildSel();
 }
 
+// Shows script coverage for the selected child + date while the note is being
+// written, so a therapist finds out before documenting rather than at billing.
+function refreshScriptStatus(){
+  var box = document.getElementById('scriptStatus');
+  if(!box) return;
+  var idx = document.getElementById('childSel').value;
+  var date = g('sessDate');
+  if(idx === '' || !date){ box.style.display='none'; return; }
+  var child = children[parseInt(idx)];
+  if(!child){ box.style.display='none'; return; }
+  var res = checkScriptCoverage(child.name, child.servType||'', date);
+  box.style.display='block';
+  if(res.ok && res.exempt){
+    box.style.cssText='margin-bottom:18px;background:var(--light);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--muted);line-height:1.5;';
+    box.innerHTML = res.reason;
+  } else if(res.ok){
+    box.style.cssText='margin-bottom:18px;background:rgba(34,197,94,.08);border:1px solid var(--green);border-radius:8px;padding:10px 12px;font-size:.78rem;color:#15803d;line-height:1.5;';
+    box.innerHTML = '<b>Script on file.</b> '+res.reason;
+  } else if(res.blocked){
+    box.style.cssText='margin-bottom:18px;background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:8px;padding:10px 12px;font-size:.78rem;color:#c53030;line-height:1.5;';
+    box.innerHTML = '<b>No valid doctor script.</b> '+res.reason
+      + '<br><span style="color:var(--muted);">This session cannot be billed until a script covering this date is on file.</span>';
+  } else {
+    box.style.cssText='margin-bottom:18px;background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;font-size:.78rem;color:#b45309;line-height:1.5;';
+    box.innerHTML = res.reason;
+  }
+}
+
 function onChildChange(){
+  refreshScriptStatus();
   var idx = document.getElementById('childSel').value;
   var warn = document.getElementById('noChildWarn');
   var prev = document.getElementById('childHdrPreview');
@@ -2543,6 +2686,24 @@ function generate837P(){
 
   if(!childNotes.length){ errEl.style.display='block'; errEl.innerText='No sessions found for selected date range.'; return; }
 
+  // Pre-billing scrub. Documentation is never blocked -- the session happened
+  // and must be recorded -- but a claim without a covering physician order is
+  // held back here rather than denied later.
+  var blocked = [];
+  childNotes.forEach(function(n){
+    var res = checkScriptCoverage(c.name, c.servType||'', n.sessDate);
+    if(res.blocked) blocked.push(n.sessDate+' — '+res.reason);
+  });
+  if(blocked.length){
+    errEl.style.display='block';
+    errEl.innerText = 'Blocked: '+blocked.length
+      + (blocked.length===1 ? ' session has' : ' sessions have')
+      + ' no doctor script covering the date of service.\n\n'
+      + blocked.join('\n')
+      + '\n\nAdd the script under the Scripts tab, then generate again.';
+    return;
+  }
+
   var now = new Date();
   var yymmdd = now.getFullYear().toString().slice(2)+('0'+(now.getMonth()+1)).slice(-2)+('0'+now.getDate()).slice(-2);
   var yyyymmdd = now.getFullYear()+('0'+(now.getMonth()+1)).slice(-2)+('0'+now.getDate()).slice(-2);
@@ -2744,6 +2905,192 @@ function copyBlk(id, btn){
   });
 }
 
+// ── DOCTOR REGISTRY & SCRIPTS ─────────────────────────────────
+// Medicaid OPRA requires a physician order covering the date of service for
+// direct therapy. Evaluations and service coordination are not ordered by a
+// doctor, so they are exempt from the block.
+var EXEMPT_FROM_SCRIPT = ['Service Coordination'];
+var editDocId = null, editRxId = null;
+
+function doctorsLoad(){ return JSON.parse(localStorage.getItem('ei_doctors_v4')||'[]'); }
+function doctorsSave(a){ localStorage.setItem('ei_doctors_v4', JSON.stringify(a)); }
+function scriptsLoad(){ return JSON.parse(localStorage.getItem('ei_scripts_v4')||'[]'); }
+function scriptsSave(a){ localStorage.setItem('ei_scripts_v4', JSON.stringify(a)); }
+function doctorName(d){ return d ? ('Dr. '+((d.firstName||'')+' '+(d.lastName||'')).trim()) : '—'; }
+function findDoctor(id){ return doctorsLoad().filter(function(d){ return d.id===id; })[0]||null; }
+
+function saveDoctor(){
+  if(!g('docLast')) return showError('docError','Doctor last name is required.');
+  var npi = g('docNPI').replace(/[^0-9]/g,'');
+  // The guide warns NPIs are checked against NPPES and a bad one rejects the
+  // whole claim on a 277, so catch the obvious problems here.
+  if(npi.length !== 10) return showError('docError','NPI must be exactly 10 digits.');
+  var arr = doctorsLoad();
+  var dupe = arr.filter(function(d){ return d.npi===npi && d.id!==editDocId; })[0];
+  if(dupe) return showError('docError','That NPI is already on file for '+doctorName(dupe)+'.');
+  var rec = {
+    id: editDocId || uid('d'),
+    firstName:g('docFirst'), lastName:g('docLast'), npi:npi,
+    medicaidId:g('docMcaid'), lic:g('docLic')
+  };
+  if(editDocId){ for(var i=0;i<arr.length;i++){ if(arr[i].id===editDocId){ arr[i]=rec; break; } } }
+  else arr.push(rec);
+  doctorsSave(arr);
+  clearError('docError'); showBadge('docBadge'); cancelDoctorEdit();
+  renderDoctors(); renderRxSelects(); renderScripts();
+}
+
+function editDoctor(id){
+  var d = findDoctor(id); if(!d) return;
+  editDocId = id;
+  s('docFirst',d.firstName); s('docLast',d.lastName); s('docNPI',d.npi);
+  s('docMcaid',d.medicaidId); s('docLic',d.lic);
+  document.getElementById('docFormLbl').textContent = 'Editing: '+doctorName(d);
+  document.getElementById('docSaveTxt').textContent = 'Update Doctor';
+  document.getElementById('docCancelBtn').style.display = 'block';
+}
+
+function cancelDoctorEdit(){
+  editDocId = null;
+  ['docFirst','docLast','docNPI','docMcaid','docLic'].forEach(function(i){ s(i,''); });
+  document.getElementById('docFormLbl').textContent = 'Doctor Registry';
+  document.getElementById('docSaveTxt').textContent = 'Add Doctor';
+  document.getElementById('docCancelBtn').style.display = 'none';
+}
+
+function deleteDoctor(id){
+  var inUse = scriptsLoad().filter(function(r){ return r.doctorId===id; }).length;
+  if(inUse) return alert('This doctor is referenced by '+inUse+' script(s). Remove those first.');
+  if(!confirm('Remove this doctor?')) return;
+  doctorsSave(doctorsLoad().filter(function(d){ return d.id!==id; }));
+  renderDoctors(); renderRxSelects();
+}
+
+function renderDoctors(){
+  var list=document.getElementById('docList'), empty=document.getElementById('docEmpty');
+  if(!list) return;
+  var arr=doctorsLoad();
+  if(!arr.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  list.innerHTML = arr.map(function(d){
+    return '<div class="ucard"><div><div class="cname">'+doctorName(d)+'</div>'
+      + '<div class="cmeta">NPI: '+d.npi+(d.medicaidId?' · Medicaid: '+d.medicaidId:'')+(d.lic?' · Lic: '+d.lic:'')+'</div></div>'
+      + '<div style="display:flex;gap:8px;flex-shrink:0;">'
+      + '<button class="btn-s" onclick="editDoctor(\''+d.id+'\')">Edit</button>'
+      + '<button class="btn-d" onclick="deleteDoctor(\''+d.id+'\')">x</button></div></div>';
+  }).join('');
+}
+
+function renderRxSelects(){
+  var cs=document.getElementById('rxChild'); if(!cs) return;
+  var curC=cs.value;
+  cs.innerHTML='<option value="">— Select Child —</option>';
+  children.forEach(function(c){
+    var o=document.createElement('option'); o.value=c.name; o.textContent=c.name; cs.appendChild(o);
+  });
+  if(curC) cs.value=curC;
+  var ds=document.getElementById('rxDoctor'); var curD=ds.value;
+  ds.innerHTML='<option value="">— Select Doctor —</option>';
+  doctorsLoad().forEach(function(d){
+    var o=document.createElement('option'); o.value=d.id; o.textContent=doctorName(d)+' · '+d.npi; ds.appendChild(o);
+  });
+  if(curD) ds.value=curD;
+}
+
+function saveScript(){
+  if(!g('rxChild')) return showError('rxError','Select a child.');
+  if(!g('rxDoctor')) return showError('rxError','Select the ordering doctor.');
+  if(!g('rxDiscipline')) return showError('rxError','Select a discipline.');
+  if(!g('rxStart') || !g('rxEnd')) return showError('rxError','Start and end dates are required.');
+  if(g('rxEnd') < g('rxStart')) return showError('rxError','End date must be on or after the start date.');
+  var arr=scriptsLoad();
+  var rec={
+    id: editRxId || uid('rx'),
+    childName:g('rxChild'), doctorId:g('rxDoctor'), discipline:g('rxDiscipline'),
+    icd10:g('rxICD'), startDate:g('rxStart'), endDate:g('rxEnd'), notes:g('rxNotes')
+  };
+  if(editRxId){ for(var i=0;i<arr.length;i++){ if(arr[i].id===editRxId){ arr[i]=rec; break; } } }
+  else arr.push(rec);
+  scriptsSave(arr);
+  clearError('rxError'); showBadge('rxBadge'); cancelScriptEdit(); renderScripts();
+  if(typeof refreshScriptStatus==='function') refreshScriptStatus();
+}
+
+function editScript(id){
+  var r=scriptsLoad().filter(function(x){ return x.id===id; })[0]; if(!r) return;
+  editRxId=id;
+  renderRxSelects();
+  s('rxChild',r.childName); s('rxDoctor',r.doctorId); s('rxDiscipline',r.discipline);
+  s('rxICD',r.icd10); s('rxStart',r.startDate); s('rxEnd',r.endDate); s('rxNotes',r.notes);
+  document.getElementById('rxFormLbl').textContent='Editing Script';
+  document.getElementById('rxSaveTxt').textContent='Update Script';
+  document.getElementById('rxCancelBtn').style.display='block';
+}
+
+function cancelScriptEdit(){
+  editRxId=null;
+  ['rxICD','rxStart','rxEnd','rxNotes'].forEach(function(i){ s(i,''); });
+  s('rxChild',''); s('rxDoctor',''); s('rxDiscipline','');
+  document.getElementById('rxFormLbl').textContent='Add Script / Order';
+  document.getElementById('rxSaveTxt').textContent='Add Script';
+  document.getElementById('rxCancelBtn').style.display='none';
+}
+
+function deleteScript(id){
+  if(!confirm('Remove this script?')) return;
+  scriptsSave(scriptsLoad().filter(function(r){ return r.id!==id; }));
+  renderScripts();
+  if(typeof refreshScriptStatus==='function') refreshScriptStatus();
+}
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+function renderScripts(){
+  var list=document.getElementById('rxList'), empty=document.getElementById('rxEmpty');
+  if(!list) return;
+  var arr=scriptsLoad();
+  if(!arr.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  var t=todayStr();
+  arr = arr.slice().sort(function(a,b){ return (a.childName||'').localeCompare(b.childName||'') || a.startDate.localeCompare(b.startDate); });
+  list.innerHTML = arr.map(function(r){
+    var state = r.endDate < t ? {t:'EXPIRED',c:'role-coordinator'}
+              : r.startDate > t ? {t:'FUTURE',c:'role-admin'}
+              : {t:'ACTIVE',c:'role-therapist'};
+    var d=findDoctor(r.doctorId);
+    return '<div class="ucard"><div><div class="cname">'+r.childName+' · '+r.discipline+'</div>'
+      + '<div class="cmeta">'+doctorName(d)+(d?' · NPI '+d.npi:'')+(r.icd10?' · ICD '+r.icd10:'')+'</div>'
+      + '<div class="cmeta">'+r.startDate+' → '+r.endDate+'</div></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'
+      + '<span class="role-badge '+state.c+'">'+state.t+'</span>'
+      + '<button class="btn-s" onclick="editScript(\''+r.id+'\')">Edit</button>'
+      + '<button class="btn-d" onclick="deleteScript(\''+r.id+'\')">x</button></div></div>';
+  }).join('');
+}
+
+// The scrub rule. Returns {ok, blocked, reason, script, referringNpi}.
+function checkScriptCoverage(childName, discipline, dateStr){
+  if(!childName || !dateStr) return {ok:false, blocked:false, reason:'Select a child and session date.'};
+  if(EXEMPT_FROM_SCRIPT.indexOf(discipline) !== -1)
+    return {ok:true, blocked:false, exempt:true, reason:discipline+' does not require a physician order.'};
+  if(!discipline) return {ok:false, blocked:false, reason:'This child has no service type set, so the script rule cannot be checked.'};
+
+  var all = scriptsLoad().filter(function(r){ return r.childName===childName && r.discipline===discipline; });
+  if(!all.length)
+    return {ok:false, blocked:true, reason:'No '+discipline+' script on file for '+childName+'.'};
+
+  var covering = all.filter(function(r){ return r.startDate <= dateStr && dateStr <= r.endDate; });
+  if(!covering.length){
+    var nearest = all.slice().sort(function(a,b){ return b.endDate.localeCompare(a.endDate); })[0];
+    return {ok:false, blocked:true,
+      reason:'No script covers '+dateStr+'. Most recent '+discipline+' script ran '+nearest.startDate+' → '+nearest.endDate+'.'};
+  }
+  var sc = covering[0];
+  var doc = findDoctor(sc.doctorId);
+  return {ok:true, blocked:false, script:sc, referringNpi:doc?doc.npi:'',
+    reason:'Covered by '+doctorName(doc)+' ('+sc.startDate+' → '+sc.endDate+').'};
+}
+
 // ── STAFF / ROLES ─────────────────────────────────────────────
 // Local role selection only. This is NOT authentication: everything lives in
 // this browser and anyone with the device can switch users. It exists to shape
@@ -2752,10 +3099,12 @@ function copyBlk(id, btn){
 var ROLE_LABELS = {admin:'Agency Admin', therapist:'Therapist', coordinator:'Service Coordinator'};
 // Which tabs each role may open. Admin sees everything.
 var ROLE_TABS = {
-  admin:       ['note','sc','users','children','profile','history','attendance','servicelog','billing'],
-  therapist:   ['note','children','profile','history','attendance','servicelog','billing'],
-  coordinator: ['sc','children','profile','history','billing']
+  admin:       ['note','sc','users','scripts','children','profile','history','attendance','servicelog','billing'],
+  therapist:   ['note','scripts','children','profile','history','attendance','servicelog','billing'],
+  coordinator: ['sc','scripts','children','profile','history','billing']
 };
+// Only an admin edits the registries; everyone else sees them read-only.
+function isAdmin(){ return !activeUser || activeUser.role === 'admin'; }
 var activeUser = null;
 var editUserId = null;
 
