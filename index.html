@@ -2723,15 +2723,15 @@ function renderBillingSession(){
     var timeStr = tm ? tm[1] : '';
     var parts = timeStr.split('-');
     var cpt = n.header.match(/CPT: ([^\n]+)/);
-    var cptCode = cpt ? cpt[1].trim().split(' ')[0] : '97155';
+    var cptCode = cpt ? cpt[1].trim().split(' ')[0] : '';
     var vt = n.header.match(/Visit Type: ([^\n]+)/);
     var visitType = vt ? vt[1].trim() : 'CV1';
     var pos = n.header.match(/Place of Service: ([^\n]+)/);
     var placeOfSvc = pos ? pos[1].trim().split(' ')[0] : '12';
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length === 2 ? toMins(parts[1].trim()) - toMins(parts[0].trim()) : 0;
-    var rt = getRate(cptCode);
-    var units = calcUnits(mins, rt ? rt.unitMin : 15);
+    var rt = cptCode ? getRate(cptCode) : null;
+    var units = rt ? calcUnits(mins, rt.unitMin) : 0;
     var amount = rt ? (units * rt.rate).toFixed(2) : '0.00';
     totalUnits += units;
     totalAmount += parseFloat(amount);
@@ -2745,7 +2745,11 @@ function renderBillingSession(){
       + ' · '+(rt?rt.unitMin:15)+' min/unit @ $'+(rt?rt.rate.toFixed(2):'0.00')+'</div>'
       // A code with no row of its own is priced by the catch-all, which is
       // wrong whenever that service uses a different unit length or rate.
-      + (rt && rt.code === '*'
+      + (!cptCode
+          ? '<div style="margin-top:6px;background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:6px;padding:6px 8px;font-size:.72rem;color:#c53030;">'
+            + 'No CPT code on this note — it cannot be billed until one is set.</div>'
+          : '')
+      + (cptCode && rt && rt.code === '*'
           ? '<div style="margin-top:6px;background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:6px;padding:6px 8px;font-size:.72rem;color:#b45309;">'
             + 'No rate set for '+cptCode+' — using the default. Add it below if this service has its own rate or unit length.</div>'
           : '')
@@ -2808,6 +2812,10 @@ function generate837P(){
   childNotes.forEach(function(n){
     var res = checkScriptCoverage(c.name, c.servType||'', n.sessDate);
     if(res.blocked) blocked.push(n.sessDate+' — '+res.reason);
+    // A missing procedure code used to fall back to 97155, which bills the
+    // session as Special Instruction regardless of what was delivered.
+    if(!(n.header||'').match(/CPT: *[A-Za-z0-9]/))
+      blocked.push(n.sessDate+' — no CPT code on this note.');
     // Remember which physician ordered this session so Loop 2310A can name
     // them as the referring provider rather than the treating therapist.
     referringFor[n.sessDate] = res.script ? findDoctor(res.script.doctorId) : null;
@@ -2815,10 +2823,10 @@ function generate837P(){
   if(blocked.length){
     errEl.style.display='block';
     errEl.innerText = 'Blocked: '+blocked.length
-      + (blocked.length===1 ? ' session has' : ' sessions have')
-      + ' no doctor script covering the date of service.\n\n'
+      + (blocked.length===1 ? ' session cannot' : ' sessions cannot')
+      + ' be billed.\n\n'
       + blocked.join('\n')
-      + '\n\nAdd the script under the Scripts tab, then generate again.';
+      + '\n\nResolve these, then generate again.';
     return;
   }
 
@@ -2875,7 +2883,7 @@ function generate837P(){
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length===2 ? toMins(endRaw)-toMins(startRaw) : 60;
     var cptM = n.header.match(/CPT: ([^\n]+)/);
-    var cptCode = cptM ? cptM[1].trim().split(' ')[0] : '97155';
+    var cptCode = cptM ? cptM[1].trim().split(' ')[0] : '';
     // Must come after cptCode is known, or every line silently prices at the
     // default rate and modifier.
     var rt = getRate(cptCode);
@@ -3049,7 +3057,8 @@ function seedRates(){
   if(ratesLoad().length) return;
   ratesSave([
     {id:uid('rt'), code:'*',     rate:27.84, mod:'96', unitMin:15, desc:'Default for unlisted codes — verify against your rate schedule'},
-    {id:uid('rt'), code:'T1017', rate:19.09, mod:'',   unitMin:15, desc:'Service coordination, per 15 minutes'}
+    {id:uid('rt'), code:'T1017', rate:19.09, mod:'',   unitMin:15, desc:'Service coordination, per 15 minutes'},
+    {id:uid('rt'), code:'97155', rate:27.84, mod:'96', unitMin:15, desc:'Special Instruction — $111.35/hr'}
   ]);
 }
 
