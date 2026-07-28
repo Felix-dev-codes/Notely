@@ -3233,6 +3233,21 @@ function seedRates(){
     {code:'92507', basis:'session', rate:83.78,  mod:'96', sessionMin:30, units:1, desc:'Speech-language therapy — Basic visit (NYC), untimed'},
     {code:'92507', basis:'session', rate:116.66, mod:'96', sessionMin:60, units:1, desc:'Speech-language therapy — Extended visit (NYC), untimed'}
   ];
+
+  // OT and PT share the OT/PT/ST rate column with speech, but unlike 92507
+  // their treatment codes are all "each 15 minutes", so they report units the
+  // way 97155 does. NYS publishes no approved code list -- the memorandum puts
+  // it on the provider to supply the code matching what was delivered -- so
+  // these are the standard treatment codes, priced and ready, not a
+  // prescription of which to use.
+  [['97110','Therapeutic exercise'],
+   ['97112','Neuromuscular re-education'],
+   ['97116','Gait training'],
+   ['97530','Therapeutic activities'],
+   ['97535','Self-care / home management training']].forEach(function(c){
+    known.push({code:c[0], basis:'session', rate:83.78,  mod:'96', sessionMin:30, units:2, desc:c[1]+' — Basic visit (NYC), 15-min code'});
+    known.push({code:c[0], basis:'session', rate:116.66, mod:'96', sessionMin:60, units:4, desc:c[1]+' — Extended visit (NYC), 15-min code'});
+  });
   var added = false;
   known.forEach(function(k){
     // A code can hold several rows (one per session length), so match on the
