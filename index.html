@@ -1590,7 +1590,8 @@
         </div>
         <div class="field-group" id="rateUnitsWrap" style="display:none;">
           <div class="field-label">Units To Report</div>
-          <input type="text" id="rateUnits" placeholder="e.g. 1"/>
+          <input type="text" id="rateUnits" placeholder="e.g. 4"/>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:4px;line-height:1.4;">From the CPT code, not the rate. A 15-minute code reports one unit per 15 minutes; an untimed code reports 1 per session regardless of length.</div>
         </div>
         <div class="field-group">
           <div class="field-label">Modifier <span style="color:var(--muted);font-weight:400;">(blank for none)</span></div>
@@ -3218,12 +3219,19 @@ function seedRates(){
   // rather than be silently mis-billed at someone else's rate.
   var known = [
     {code:'T1017', basis:'unit',    rate:19.09,  mod:'',   unitMin:15, desc:'Service coordination, per quarter hour (NYC)'},
-    // Special Instruction is "other than OT, PT, ST"
-    {code:'97155', basis:'session', rate:79.54,  mod:'96', sessionMin:30, units:1, desc:'Special Instruction — Basic visit (NYC)'},
-    {code:'97155', basis:'session', rate:111.35, mod:'96', sessionMin:60, units:1, desc:'Special Instruction — Extended visit (NYC)'},
-    // Speech is an ST discipline, so it takes the OT/PT/ST column
-    {code:'92507', basis:'session', rate:83.78,  mod:'96', sessionMin:30, units:1, desc:'Speech-language therapy — Basic visit (NYC)'},
-    {code:'92507', basis:'session', rate:116.66, mod:'96', sessionMin:60, units:1, desc:'Speech-language therapy — Extended visit (NYC)'}
+    // Units come from the CPT code's own definition; the dollar amount comes
+    // from the NYS schedule. SV102 is the line total, not a per-unit price, so
+    // a timed code legitimately reports several units against one visit rate.
+    //
+    // 97155 is defined "each 15 minutes", so a visit reports duration/15 units.
+    // Special Instruction sits in the "other than OT, PT, ST" column.
+    {code:'97155', basis:'session', rate:79.54,  mod:'96', sessionMin:30, units:2, desc:'Special Instruction — Basic visit (NYC), 15-min code'},
+    {code:'97155', basis:'session', rate:111.35, mod:'96', sessionMin:60, units:4, desc:'Special Instruction — Extended visit (NYC), 15-min code'},
+    // 92507 is untimed: exactly one unit per session whatever its length.
+    // Reporting several units for a longer session draws denials and audits.
+    // Speech is an ST discipline, so it takes the OT/PT/ST column.
+    {code:'92507', basis:'session', rate:83.78,  mod:'96', sessionMin:30, units:1, desc:'Speech-language therapy — Basic visit (NYC), untimed'},
+    {code:'92507', basis:'session', rate:116.66, mod:'96', sessionMin:60, units:1, desc:'Speech-language therapy — Extended visit (NYC), untimed'}
   ];
   var added = false;
   known.forEach(function(k){
