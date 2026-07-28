@@ -3032,7 +3032,7 @@ function generate837P(){
     // Loop 2310B — rendering provider is the clinician who delivered the service
     seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
     seg.push('LX*1');
-    seg.push('SV1*HC:'+cptCode+(pr.mod ? ':'+pr.mod : '')+'*'+amount+'*UN*'+units+'***1');
+    seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+amount+'*UN*'+units+'***1');
     seg.push('DTP*472*D8*'+sessDateFmt);
     seg.push('REF*6R*'+claimId+'L1');
   });
@@ -3317,6 +3317,30 @@ function scBillableByDate(childName, dateFrom, dateTo){
 function toHHMMc(t){
   var m = (t||'').match(/(\d+):(\d+)/);
   return m ? ('0'+m[1]).slice(-2)+('0'+m[2]).slice(-2) : '0000';
+}
+
+// GN/GO/GP identify the plan of care a therapy service falls under, so they
+// follow the child's discipline rather than the procedure code -- 97110 is
+// billed by both OT and PT and the modifier is what tells them apart.
+// Special Instruction and service coordination are not therapy plans of care
+// and take no discipline modifier.
+function disciplineModifier(servType){
+  var s = (servType||'').toUpperCase();
+  if(s.indexOf('SPEECH') !== -1 || s.indexOf('(ST)') !== -1) return 'GN';
+  if(s.indexOf('OCCUPATIONAL') !== -1 || s.indexOf('(OT)') !== -1) return 'GO';
+  if(s.indexOf('PHYSICAL') !== -1 || s.indexOf('(PT)') !== -1) return 'GP';
+  return '';
+}
+
+// Builds the SV101 modifier suffix. Discipline modifier first, then the
+// habilitative/rehabilitative modifier from the rate row. 96 and 97 are
+// mutually exclusive on a line, so only one ever comes from the rate.
+function modifierSuffix(servType, rateMod){
+  var mods = [];
+  var d = disciplineModifier(servType);
+  if(d) mods.push(d);
+  if(rateMod) mods.push(rateMod);
+  return mods.length ? ':'+mods.join(':') : '';
 }
 
 function priceSession(code, mins){
