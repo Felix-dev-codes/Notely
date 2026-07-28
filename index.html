@@ -3210,15 +3210,20 @@ function ratesSave(a){ localStorage.setItem('ei_rates_v4', JSON.stringify(a)); }
 // current NYS schedule, which varies by region.
 function seedRates(){
   var arr = ratesLoad();
+  // NYS EI Service Rates effective 10/1/2024, New York City column.
+  // Service coordination is the only per-unit rate in the schedule -- it is
+  // explicitly a "Quarterly Hour Rate". Everything else is a flat payment per
+  // visit, Basic or Extended, split by whether the discipline is OT/PT/ST.
+  // There is deliberately no catch-all row: an unpriced code must refuse
+  // rather than be silently mis-billed at someone else's rate.
   var known = [
-    {code:'*',     basis:'unit',    rate:27.84, mod:'96', unitMin:15, desc:'Default for unlisted codes — verify against your rate schedule'},
-    {code:'T1017', basis:'unit',    rate:19.09, mod:'',   unitMin:15, desc:'Service coordination — $76.36/hr'},
-    {code:'97155', basis:'unit',    rate:27.84, mod:'96', unitMin:15, desc:'Special Instruction — $111.35/hr'},
-    // Speech is priced by session length, not per unit -- 60 minutes pays
-    // $116.66, not two 30-minute units at $167.56 -- so each duration is its
-    // own row and any other length blocks rather than being mis-priced.
-    {code:'92507', basis:'session', rate:83.78,  mod:'96', sessionMin:30, units:1, desc:'Speech-language therapy, 30-minute session'},
-    {code:'92507', basis:'session', rate:116.66, mod:'96', sessionMin:60, units:1, desc:'Speech-language therapy, 60-minute session'}
+    {code:'T1017', basis:'unit',    rate:19.09,  mod:'',   unitMin:15, desc:'Service coordination, per quarter hour (NYC)'},
+    // Special Instruction is "other than OT, PT, ST"
+    {code:'97155', basis:'session', rate:79.54,  mod:'96', sessionMin:30, units:1, desc:'Special Instruction — Basic visit (NYC)'},
+    {code:'97155', basis:'session', rate:111.35, mod:'96', sessionMin:60, units:1, desc:'Special Instruction — Extended visit (NYC)'},
+    // Speech is an ST discipline, so it takes the OT/PT/ST column
+    {code:'92507', basis:'session', rate:83.78,  mod:'96', sessionMin:30, units:1, desc:'Speech-language therapy — Basic visit (NYC)'},
+    {code:'92507', basis:'session', rate:116.66, mod:'96', sessionMin:60, units:1, desc:'Speech-language therapy — Extended visit (NYC)'}
   ];
   var added = false;
   known.forEach(function(k){
