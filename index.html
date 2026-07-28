@@ -1581,6 +1581,13 @@
       <div id="billError" style="display:none;background:rgba(220,38,38,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:10px;font-size:.82rem;color:#dc2626;"></div>
     </div>
 
+    <!-- CLAIMS LEDGER -->
+    <div class="div" style="margin-top:26px;"></div>
+    <div class="slabel">Submitted Claims</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Every claim this app has generated. Mark what the 999 and 277 came back with — a rejected claim is raised in Alerts until it is resolved.</div>
+    <div id="claimsEmpty" class="ibox">No claims generated yet.</div>
+    <div id="claimsList"></div>
+
     <!-- RATE SCHEDULE (admin only -- reimbursement amounts are not shown to clinicians) -->
     <div id="rateSection">
     <div class="div" style="margin-top:26px;"></div>
@@ -1788,6 +1795,7 @@ function showPage(page, el){
   if(page === 'servicelog'){ renderSlogChildSel(); renderServiceLog(); }
   if(page === 'billing'){
     renderBillingChildSel();
+    renderClaims();
     // Reimbursement amounts are agency business, not clinical information, so
     // the whole schedule is hidden from anyone who is not an admin.
     var showRates = isAdmin();
@@ -3089,6 +3097,7 @@ function generate837P(){
   var icn = String(Math.floor(Math.random()*999999999)).padStart(9,'0');
 
   var seg = [];
+  var claimLines = [];
   // ISA14 must be 1 to request the return 999; 0 asks for no acknowledgment,
   // which forfeits the file that confirms the submission was even accepted.
   // ISA15 is P because the guide states EI-Hub only accepts production data --
@@ -3159,6 +3168,8 @@ function generate837P(){
     seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+amount+'*UN*'+units+'***1');
     seg.push('DTP*472*D8*'+sessDateFmt);
     seg.push('REF*6R*'+claimId+'L1');
+    claimLines.push({claimId:claimId, kind:'therapy', serviceDate:n.sessDate,
+                     cpt:cptCode, units:units, amount:parseFloat(amount), noteIds:[n.id]});
   });
 
   // ── SERVICE COORDINATION CLAIMS (T1017) ──────────────────────
@@ -3191,6 +3202,9 @@ function generate837P(){
       seg.push('NTE*ADD*'+toHHMMc(ln.sc.start)+'-'+toHHMMc(ln.sc.end));
       seg.push('REF*6R*'+scClaimId+'L'+(li+1));
     });
+    claimLines.push({claimId:scClaimId, kind:'sc', serviceDate:dt, cpt:'T1017',
+                     units:lines.reduce(function(a,l){return a+l.units;},0),
+                     amount:claimTotal, noteIds:contacts.map(function(x){return x.id;})});
   });
 
   // SE01 counts the segments in the transaction set: ST through SE inclusive.
@@ -3216,6 +3230,32 @@ function generate837P(){
     for(var i=0;i<allN.length;i++){ if(allN[i].id===n.id){ allN[i].billed=true; allN[i].invoiceNum=invoiceNum; break; } }
   });
   localStorage.setItem('ei_notes_v4', JSON.stringify(allN));
+
+  // Record what went out. Without this the app cannot say what it submitted,
+  // which makes a rejection impossible to trace back and a corrected claim
+  // impossible to build -- a correction has to quote the original claim ID.
+  var ledger = claimsLoad();
+  claimLines.forEach(function(cl){
+    ledger.unshift({
+      id: uid('clm'), claimId: cl.claimId, invoiceNum: invoiceNum,
+      childName: c.name, childEI: childEI, kind: cl.kind,
+      serviceDate: cl.serviceDate, cpt: cl.cpt, units: cl.units,
+      amount: cl.amount, noteIds: cl.noteIds || [],
+      fileName: fileName, submittedAt: new Date().toISOString(),
+      status: 'submitted', eiHubClaimId: '', reason: ''
+    });
+  });
+  claimsSave(ledger);
+  // Service coordination contacts are marked billed the same way notes are.
+  if(scDates.length){
+    var allSc = scLoad();
+    scDates.forEach(function(dt){
+      (scByDate[dt]||[]).forEach(function(sc){
+        for(var i=0;i<allSc.length;i++){ if(allSc[i].id===sc.id){ allSc[i].billed=true; allSc[i].invoiceNum=invoiceNum; break; } }
+      });
+    });
+    scSave(allSc);
+  }
   alert('837P file downloaded: '+fileName+'\n\nUpload to EI-Hub:\nhub.prod.nyeihub.com\nCase Management → Attendance → 837 Loader');
 }
 
@@ -3438,6 +3478,19 @@ function buildAlerts(){
     }
   });
 
+  // — Claims the payer turned down —
+  claimsLoad().forEach(function(cl){
+    if(cl.status !== 'rejected') return;
+    out.push({sev:'crit', cat:'Denial', who:cl.childName,
+      msg:'Claim '+cl.claimId+' ('+cl.serviceDate+', '+cl.cpt+', $'+Number(cl.amount).toFixed(2)+') was rejected'
+        + (cl.reason ? ': '+cl.reason : '.')
+        + (cl.eiHubClaimId ? '' : ' No EI-Hub claim ID recorded, which a corrected claim needs.'),
+      act:'billing'});
+  });
+  var awaiting = claimsLoad().filter(function(cl){ return cl.status === 'submitted'; }).length;
+  if(awaiting) out.push({sev:'info', cat:'Claims', who:'',
+    msg:awaiting+' claim'+(awaiting===1?'':'s')+' submitted with no response recorded yet.', act:'billing'});
+
   // — Work delivered but not yet billed —
   var unbilled = notes.filter(function(n){ return !n.billed && n.status !== 'cancelled'; }).length;
   if(unbilled) out.push({sev:'info', cat:'Billing', who:'',
@@ -3497,6 +3550,68 @@ function updateAlertBadge(crit){
   if(!b) return;
   if(crit > 0){ b.textContent = crit; b.style.display = 'inline-block'; }
   else b.style.display = 'none';
+}
+
+// ── CLAIMS LEDGER ─────────────────────────────────────────────
+// What was actually submitted. A rejection cannot be traced back without it,
+// and a corrected claim has to quote the original EI-Hub claim ID.
+var CLAIM_STATUS = {
+  submitted:{label:'Submitted', bg:'var(--light)',        bd:'var(--border)', fg:'var(--muted)'},
+  accepted: {label:'Accepted',  bg:'rgba(34,197,94,.1)',  bd:'var(--green)',  fg:'#15803d'},
+  rejected: {label:'Rejected',  bg:'rgba(239,68,68,.08)', bd:'var(--red)',    fg:'#c53030'},
+  paid:     {label:'Paid',      bg:'var(--primary-glow)', bd:'var(--primary)',fg:'var(--primary)'},
+  void:     {label:'Voided',    bg:'rgba(245,158,11,.1)', bd:'#f59e0b',       fg:'#b45309'}
+};
+function claimsLoad(){ return JSON.parse(localStorage.getItem('ei_claims_v4')||'[]'); }
+function claimsSave(a){ localStorage.setItem('ei_claims_v4', JSON.stringify(a)); }
+
+function setClaimStatus(id, status){
+  var arr = claimsLoad();
+  var row = arr.filter(function(c){ return c.id===id; })[0];
+  if(!row) return;
+  if(status === 'rejected'){
+    var why = prompt('Rejection reason from the 277 (code or text):', row.reason||'');
+    if(why === null) return;
+    row.reason = why.trim();
+  }
+  if(status === 'accepted' || status === 'rejected'){
+    var hub = prompt('EI-Hub claim ID, if shown (needed to correct or void this later):', row.eiHubClaimId||'');
+    if(hub !== null) row.eiHubClaimId = hub.trim();
+  }
+  row.status = status;
+  claimsSave(arr);
+  renderClaims();
+  try{ updateAlertBadge(buildAlerts().filter(function(a){return a.sev==='crit';}).length); }catch(e){}
+}
+
+function deleteClaim(id){
+  if(!confirm('Remove this claim from the ledger? The sessions stay billed.')) return;
+  claimsSave(claimsLoad().filter(function(c){ return c.id!==id; }));
+  renderClaims();
+}
+
+function renderClaims(){
+  var list = document.getElementById('claimsList'), empty = document.getElementById('claimsEmpty');
+  if(!list) return;
+  var arr = claimsLoad();
+  if(!arr.length){ if(empty) empty.style.display='block'; list.innerHTML=''; return; }
+  if(empty) empty.style.display='none';
+  list.innerHTML = arr.map(function(c){
+    var st = CLAIM_STATUS[c.status] || CLAIM_STATUS.submitted;
+    var next = ['accepted','rejected','paid','void'].filter(function(x){ return x!==c.status; });
+    return '<div style="border:1px solid '+st.bd+';background:'+st.bg+';border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">'
+      + '<div style="font-weight:600;font-size:.86rem;">'+c.childName+' · '+c.serviceDate+'</div>'
+      + '<span class="role-badge" style="background:transparent;border:1px solid '+st.bd+';color:'+st.fg+';">'+st.label+'</span>'
+      + '</div>'
+      + '<div class="cmeta">'+c.claimId+' · '+c.cpt+' · '+c.units+' unit'+(c.units===1?'':'s')+' · $'+Number(c.amount).toFixed(2)+'</div>'
+      + (c.eiHubClaimId ? '<div class="cmeta">EI-Hub ID: '+c.eiHubClaimId+'</div>' : '')
+      + (c.reason ? '<div style="font-size:.78rem;color:#c53030;margin-top:4px;">Reason: '+c.reason+'</div>' : '')
+      + '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">'
+      + next.map(function(x){ return '<button class="btn-s" style="font-size:.66rem;padding:3px 8px;" onclick="setClaimStatus(\'' + c.id + '\',\'' + x + '\')">Mark '+CLAIM_STATUS[x].label+'</button>'; }).join('')
+      + '<button class="btn-d" style="font-size:.66rem;padding:3px 8px;" onclick="deleteClaim(\'' + c.id + '\')">x</button>'
+      + '</div></div>';
+  }).join('');
 }
 
 // ── RATE SCHEDULE ─────────────────────────────────────────────
