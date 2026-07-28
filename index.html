@@ -1555,6 +1555,21 @@
     <!-- RATE SCHEDULE (admin only -- reimbursement amounts are not shown to clinicians) -->
     <div id="rateSection">
     <div class="div" style="margin-top:26px;"></div>
+
+    <!-- MODIFIER FORMAT -->
+    <div class="slabel">Claim Modifier Format</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Which modifiers each therapy line carries. The EI-Hub guide permits any combination and its examples all use a single modifier, so if a 277 rejects on modifiers, change this and resubmit as a corrected claim.</div>
+    <div class="field-group">
+      <select id="modFormatSel" onchange="saveModFormat()">
+        <option value="discipline">Discipline only — GP / GO / GN</option>
+        <option value="discipline96">Discipline + 96 — GP:96</option>
+        <option value="hab">Habilitative only — 96</option>
+      </select>
+    </div>
+    <div class="sbadge" id="modFormatBadge">Saved</div>
+    <div id="modFormatPreview" class="ibox" style="margin-bottom:18px;"></div>
+
+    <div class="div" style="margin-top:20px;"></div>
     <div class="slabel">Rate Schedule</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Amount billed per 15-minute unit. Service coordination pays a different rate from therapy, so each code is priced separately.</div>
     <div id="rateFormWrap">
@@ -1747,7 +1762,12 @@ function showPage(page, el){
     // the whole schedule is hidden from anyone who is not an admin.
     var showRates = isAdmin();
     document.getElementById('rateSection').style.display = showRates ? '' : 'none';
-    if(showRates){ renderRates(); document.getElementById('rateFormWrap').style.display = ''; }
+    if(showRates){
+      renderRates();
+      document.getElementById('rateFormWrap').style.display = '';
+      s('modFormatSel', modFormat());
+      renderModFormatPreview();
+    }
   }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
   if(page === 'users'){ renderUsers(); }
@@ -3342,15 +3362,47 @@ function disciplineModifier(servType){
   return '';
 }
 
-// Builds the SV101 modifier suffix. Discipline modifier first, then the
-// habilitative/rehabilitative modifier from the rate row. 96 and 97 are
-// mutually exclusive on a line, so only one ever comes from the rate.
+// Which modifiers a claim line carries. The companion guide lists GN/GO/GP and
+// 96 as commonly used and permits any combination, without saying which this
+// payer expects -- and every example in it shows a single modifier. Since that
+// can only be settled by a 277 coming back, it is a setting rather than a
+// decision baked into the code.
+function modFormat(){ return localStorage.getItem('ei_modformat_v4') || 'discipline'; }
+
 function modifierSuffix(servType, rateMod){
+  var fmt = modFormat();
   var mods = [];
+  // Service coordination is not a therapy plan of care and is not habilitative
+  // treatment; the guide's own T1017 example carries no modifier at all.
+  if((servType||'').toUpperCase().indexOf('COORDINATION') !== -1) return rateMod ? ':'+rateMod : '';
   var d = disciplineModifier(servType);
-  if(d) mods.push(d);
+  if(fmt !== 'hab' && d) mods.push(d);
+  if(fmt === 'discipline96' || fmt === 'hab') mods.push('96');
+  // Anything set on the rate row itself (95 for telemedicine, say) comes last.
   if(rateMod) mods.push(rateMod);
   return mods.length ? ':'+mods.join(':') : '';
+}
+
+// Shows what each discipline's line looks like under the chosen format, so
+// the setting can be checked against a 277 without generating a file.
+function renderModFormatPreview(){
+  var box = document.getElementById('modFormatPreview');
+  if(!box) return;
+  var rows = [['Physical Therapy (PT)','97110'],['Occupational Therapy (OT)','97530'],
+              ['Speech-Language (ST)','92507'],['Special Instruction (SI)','97155'],
+              ['Service Coordination','T1017']];
+  box.innerHTML = '<div style="font-family:var(--mono);font-size:.72rem;line-height:1.9;">'
+    + rows.map(function(r){
+        return '<div>HC:'+r[1]+modifierSuffix(r[0],'')+'<span style="color:var(--muted);"> — '+r[0]+'</span></div>';
+      }).join('')
+    + '</div>';
+}
+
+function saveModFormat(){
+  localStorage.setItem('ei_modformat_v4', g('modFormatSel'));
+  showBadge('modFormatBadge');
+  renderModFormatPreview();
+  if(document.getElementById('billChildSel') && document.getElementById('billChildSel').value !== '') renderBillingSession();
 }
 
 function priceSession(code, mins){
