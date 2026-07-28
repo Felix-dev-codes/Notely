@@ -2872,7 +2872,11 @@ function generate837P(){
   var icn = String(Math.floor(Math.random()*999999999)).padStart(9,'0');
 
   var seg = [];
-  seg.push('ISA*00*          *00*          *ZZ*'+npi.padEnd(15)+'*ZZ*EIHUB          *'+yymmdd+'*'+hhmm+'*^*00501*'+icn+'*0*P*:');
+  // ISA14 must be 1 to request the return 999; 0 asks for no acknowledgment,
+  // which forfeits the file that confirms the submission was even accepted.
+  // ISA15 is P because the guide states EI-Hub only accepts production data --
+  // there is no test mode, so every upload is a live claim.
+  seg.push('ISA*00*          *00*          *ZZ*'+npi.padEnd(15)+'*ZZ*EIHUB          *'+yymmdd+'*'+hhmm+'*^*00501*'+icn+'*1*P*:');
   seg.push('GS*HC*'+npi+'*EIHUB*'+yyyymmdd+'*'+hhmm+'*1*X*005010X222A1');
   seg.push('ST*837*0001*005010X222A1');
   seg.push('BHT*0019*00*'+invoiceNum+'*'+yyyymmdd+'*'+hhmm+'*CH');
