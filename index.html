@@ -1293,6 +1293,31 @@
 
       <div class="div" style="margin-top:24px;"></div>
 
+      <!-- COUNTY / EIO REFERRING SOURCE -->
+      <div class="sec-header" style="margin-bottom:12px;">County / EIO Referring Source</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Service coordination and evaluations are not ordered by a physician, but a claim still needs a referring provider. This one is used instead of a doctor for those services.</div>
+      <div id="eioFormWrap">
+        <div class="g2">
+          <div class="field-group">
+            <div class="field-label">Referring First Name</div>
+            <input type="text" id="eioFirst" placeholder="e.g. Pat"/>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Referring Last Name</div>
+            <input type="text" id="eioLast" placeholder="e.g. Rivera"/>
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Referring NPI</div>
+          <input type="text" id="eioNPI" placeholder="10-digit NPI"/>
+        </div>
+        <div class="val-error" id="eioError"></div>
+        <button class="btn-p" onclick="saveEIO()"><span>Save Referring Source</span></button>
+        <div class="sbadge" id="eioBadge">Saved</div>
+      </div>
+
+      <div class="div" style="margin-top:24px;"></div>
+
       <!-- PRESCRIPTIONS -->
       <div class="sec-header" style="margin-bottom:12px;" id="rxFormLbl">Add Script / Order</div>
       <div id="rxFormWrap">
@@ -1718,7 +1743,8 @@ function showPage(page, el){
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
   if(page === 'users'){ renderUsers(); }
   if(page === 'scripts'){
-    renderDoctors(); renderRxSelects(); renderScripts();
+    renderDoctors(); renderRxSelects(); renderScripts(); loadEIOForm();
+    document.getElementById('eioFormWrap').style.display = isAdmin() ? '' : 'none';
     var ed = isAdmin() ? '' : 'none';
     document.getElementById('docFormWrap').style.display = ed;
     document.getElementById('rxFormWrap').style.display = ed;
@@ -2727,7 +2753,10 @@ function renderBillingSession(){
     if(dateTo && n.sessDate > dateTo) return false;
     return true;
   }).sort(function(a,b){ return new Date(a.sessDate)-new Date(b.sessDate); });
-  if(!childNotes.length){ empty.style.display='block'; sessions.style.display='none'; return; }
+  var scPreview = scBillableByDate(c.name, dateFrom, dateTo);
+  if(!childNotes.length && !Object.keys(scPreview).length){
+    empty.style.display='block'; sessions.style.display='none'; return;
+  }
   empty.style.display='none'; sessions.style.display='block';
 
   var rows = '';
@@ -2770,6 +2799,37 @@ function renderBillingSession(){
           : '')
       + '</div>';
   });
+  // Service coordination for the same range, grouped by date the way the
+  // claims will be, so the preview matches the file.
+  var scGroups = scBillableByDate(c.name, dateFrom, dateTo);
+  var scDates = Object.keys(scGroups).sort();
+  var scCount = 0;
+  scDates.forEach(function(dt){
+    var contacts = scGroups[dt];
+    var dayTotal = 0, lineHtml = '';
+    contacts.forEach(function(sc){
+      var pr = priceSession('T1017', sc.mins);
+      if(pr.error) return;
+      dayTotal += pr.amount; scCount++;
+      totalUnits += pr.units; totalAmount += pr.amount;
+      lineHtml += '<div style="font-size:.74rem;color:var(--muted);margin-top:3px;">'
+        + '&nbsp;&nbsp;• '+sc.start+'–'+sc.end+' · '+sc.mins+' min · '+pr.units+' unit'+(pr.units===1?'':'s')
+        + ' · $'+pr.amount.toFixed(2)+' · '+sc.activity+'</div>';
+    });
+    if(!lineHtml) return;
+    rows += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:.82rem;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+      + '<div style="font-weight:600;">'+dt+' <span style="font-family:var(--mono);font-size:.65rem;background:rgba(245,158,11,.12);border:1px solid #f59e0b;color:#b45309;padding:2px 6px;border-radius:10px;">T1017</span></div>'
+      + '<div style="font-family:var(--mono);font-size:.7rem;color:var(--primary);">$'+dayTotal.toFixed(2)+'</div>'
+      + '</div>'
+      + '<div style="color:var(--muted);font-size:.76rem;">Service coordination · '+contacts.length+' encounter'+(contacts.length===1?'':'s')+' → '+contacts.length+' service line'+(contacts.length===1?'':'s')+'</div>'
+      + lineHtml
+      + '</div>';
+  });
+  if(scCount && !(eioLoad()||{}).npi){
+    rows += '<div style="background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:8px;padding:8px 10px;font-size:.74rem;color:#c53030;margin-bottom:8px;">'
+      + 'Service coordination cannot bill until a County / EIO referring provider is set under the Scripts tab.</div>';
+  }
   document.getElementById('billSessionRows').innerHTML = rows;
   document.getElementById('billTotal').innerHTML = '<b>Total Sessions:</b> '+childNotes.length+' &nbsp;·&nbsp; <b>Total Units:</b> '+totalUnits+' &nbsp;·&nbsp; <b>Total Amount:</b> $'+totalAmount.toFixed(2);
 }
@@ -2817,7 +2877,13 @@ function generate837P(){
     return true;
   }).sort(function(a,b){ return new Date(a.sessDate)-new Date(b.sessDate); });
 
-  if(!childNotes.length){ errEl.style.display='block'; errEl.innerText='No sessions found for selected date range.'; return; }
+  // A batch may legitimately hold only service coordination, so check both
+  // sources before declaring the range empty.
+  if(!childNotes.length && !Object.keys(scBillableByDate(c.name, dateFrom, dateTo)).length){
+    errEl.style.display='block';
+    errEl.innerText='No sessions or service coordination contacts found for selected date range.';
+    return;
+  }
 
   // Pre-billing scrub. Documentation is never blocked -- the session happened
   // and must be recorded -- but a claim without a covering physician order is
@@ -2848,6 +2914,24 @@ function generate837P(){
       + '\n\nResolve these, then generate again.';
     return;
   }
+
+  // Service coordination for the same child and range, grouped into one claim
+  // per date. These bill as T1017 alongside the therapy claims in one file.
+  var scByDate = scBillableByDate(c.name, dateFrom, dateTo);
+  var scDates = Object.keys(scByDate);
+  var eio = eioLoad() || {};
+  if(scDates.length && !eio.npi){
+    errEl.style.display='block';
+    errEl.innerText = 'There '+(scDates.length===1?'is 1 service coordination date':'are '+scDates.length+' service coordination dates')
+      + ' to bill, but no County / EIO referring provider is set.\n\n'
+      + 'Service coordination has no physician order, so the claim needs that referring NPI. '
+      + 'Add it under the Scripts tab, then generate again.';
+    return;
+  }
+  // Place of service and diagnosis are not captured on an SC contact note, so
+  // they come from the child record.
+  var scPos = '12';
+  var scIcd = (c.icd||'').replace(/\./g,'').split(' ')[0] || 'F809';
 
   var now = new Date();
   var yymmdd = now.getFullYear().toString().slice(2)+('0'+(now.getMonth()+1)).slice(-2)+('0'+now.getDate()).slice(-2);
@@ -2944,7 +3028,43 @@ function generate837P(){
     seg.push('REF*6R*'+claimId+'L1');
   });
 
-  var segCount = seg.length + 2;
+  // ── SERVICE COORDINATION CLAIMS (T1017) ──────────────────────
+  // Structurally different from therapy: the NTE moves to the service line
+  // and carries only HHMM-HHMM with no visit-type prefix, T1017 takes no
+  // modifier, every same-day encounter is its own 2400 line, and each date
+  // is its own 2300 claim.
+  Object.keys(scByDate).sort().forEach(function(dt, di){
+    var contacts = scByDate[dt];
+    var claimTotal = 0;
+    var lines = contacts.map(function(sc){
+      var pr = priceSession('T1017', sc.mins);
+      if(pr.error) return null;
+      claimTotal += pr.amount;
+      return {sc:sc, units:pr.units, amount:pr.amount, mod:pr.mod};
+    }).filter(Boolean);
+    if(!lines.length) return;
+
+    var scClaimId = invoiceNum+'S'+(di+1);
+    seg.push('CLM*'+scClaimId+'*'+claimTotal.toFixed(2)+'***'+scPos+':B:1*Y*C*N*Y*P');
+    seg.push('REF*G1*'+(contacts[0].authCode||authNum));
+    seg.push('REF*EA*'+childEI);
+    seg.push('HI*ABK:'+scIcd);
+    seg.push('NM1*DN*1*'+(eio.lastName||'').toUpperCase()+'*'+(eio.firstName||'').toUpperCase()+'****XX*'+eio.npi);
+    seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
+    lines.forEach(function(ln, li){
+      seg.push('LX*'+(li+1));
+      seg.push('SV1*HC:T1017'+(ln.mod ? ':'+ln.mod : '')+'*'+ln.amount.toFixed(2)+'*UN*'+ln.units+'***1');
+      seg.push('DTP*472*D8*'+dt.replace(/-/g,''));
+      seg.push('NTE*ADD*'+toHHMMc(ln.sc.start)+'-'+toHHMMc(ln.sc.end));
+      seg.push('REF*6R*'+scClaimId+'L'+(li+1));
+    });
+  });
+
+  // SE01 counts the segments in the transaction set: ST through SE inclusive.
+  // It previously counted the whole array plus two, which wrongly included the
+  // ISA/GS envelope and overshot -- a mismatch here fails the 999 outright.
+  var stIdx = seg.findIndex(function(x){ return x.indexOf('ST*') === 0; });
+  var segCount = (seg.length - stIdx) + 1;
   seg.push('SE*'+segCount+'*0001');
   seg.push('GE*1*1');
   seg.push('IEA*1*'+icn);
@@ -3140,6 +3260,29 @@ function headerMins(header){
   return toMins(parts[1]) - toMins(parts[0]);
 }
 
+// Service coordination notes billable for a child in a date range, grouped by
+// date. The guide requires each same-day encounter on its own 2400 service
+// line, and a new 2300 claim loop per date -- so the grouping is the claim
+// structure, not a display choice.
+function scBillableByDate(childName, dateFrom, dateTo){
+  var rows = scLoad().filter(function(n){
+    if(n.childName !== childName) return false;
+    if(n.billed) return false;
+    if(dateFrom && n.date < dateFrom) return false;
+    if(dateTo && n.date > dateTo) return false;
+    return (n.units||0) > 0;
+  }).sort(function(a,b){ return a.date.localeCompare(b.date) || (a.start||'').localeCompare(b.start||''); });
+  var byDate = {};
+  rows.forEach(function(n){ (byDate[n.date] = byDate[n.date] || []).push(n); });
+  return byDate;
+}
+
+// "09:05" -> "0905", the HHMM form Loop 2400 NTE requires.
+function toHHMMc(t){
+  var m = (t||'').match(/(\d+):(\d+)/);
+  return m ? ('0'+m[1]).slice(-2)+('0'+m[2]).slice(-2) : '0000';
+}
+
 function priceSession(code, mins){
   seedRates();
   var arr = ratesLoad();
@@ -3281,6 +3424,22 @@ function renderRates(){
 // doctor, so they are exempt from the block.
 var EXEMPT_FROM_SCRIPT = ['Service Coordination'];
 var editDocId = null, editRxId = null;
+
+// Referring provider used when no physician script applies -- service
+// coordination and evaluations. Without it those claims would name the
+// treating clinician as their own referrer, which is the bug fixed for therapy.
+function eioLoad(){ return JSON.parse(localStorage.getItem('ei_eio_v4')||'null'); }
+function saveEIO(){
+  var npi = g('eioNPI').replace(/[^0-9]/g,'');
+  if(!g('eioLast')) return showError('eioError','Referring last name is required.');
+  if(npi.length !== 10) return showError('eioError','NPI must be exactly 10 digits.');
+  localStorage.setItem('ei_eio_v4', JSON.stringify({firstName:g('eioFirst'), lastName:g('eioLast'), npi:npi}));
+  clearError('eioError'); showBadge('eioBadge');
+}
+function loadEIOForm(){
+  var e = eioLoad(); if(!e) return;
+  s('eioFirst',e.firstName); s('eioLast',e.lastName); s('eioNPI',e.npi);
+}
 
 function doctorsLoad(){ return JSON.parse(localStorage.getItem('ei_doctors_v4')||'[]'); }
 function doctorsSave(a){ localStorage.setItem('ei_doctors_v4', JSON.stringify(a)); }
