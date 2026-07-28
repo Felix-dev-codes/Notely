@@ -2096,15 +2096,47 @@ function deleteChild(i){
   children.splice(i,1); localStorage.setItem('ei_c4',JSON.stringify(children));
   renderChildList(); renderChildSel();
 }
+// Children the acting user is responsible for. Assignment is stored on the
+// child so one child can be shared by, say, a therapist and a coordinator.
+// An admin, or an install with no staff set up, sees everyone.
+function visibleChildIdx(){
+  var all = children.map(function(_,i){ return i; });
+  if(!activeUser || activeUser.role === 'admin') return all;
+  return all.filter(function(i){
+    var a = children[i].assigned;
+    // Unassigned children stay visible rather than vanishing from a caseload
+    // that was working before assignment existed.
+    if(!a || !a.length) return true;
+    return a.indexOf(activeUser.id) !== -1;
+  });
+}
+
+function assignedNames(c){
+  if(!c.assigned || !c.assigned.length) return '';
+  var us = usersLoad();
+  return c.assigned.map(function(id){
+    var u = us.filter(function(x){ return x.id===id; })[0];
+    return u ? userFullName(u) : null;
+  }).filter(Boolean).join(', ');
+}
+
 function renderChildList(){
   var el = document.getElementById('childList');
   if(!children.length){ el.innerHTML = '<div class="ibox">No children saved yet.</div>'; return; }
   var html = '';
-  children.forEach(function(c,i){
+  var vis = visibleChildIdx();
+  if(!vis.length){ el.innerHTML = '<div class="ibox">No children assigned to you yet.</div>'; return; }
+  vis.forEach(function(i){
+    var c = children[i];
+    var who = assignedNames(c);
     html += '<div class="ccard">'
       + '<div><div class="cname">'+c.name+'</div>'
-      + '<div class="cmeta">'+(c.servType||'No service')+(c.approach?' · '+c.approach:'')+(c.authCode?' · Auth: '+c.authCode:'')+' · ICD: '+(c.icd||'—')+'</div></div>'
-      + '<div class="cacts"><button class="btn-s" onclick="editChild('+i+')">Edit</button>'
+      + '<div class="cmeta">'+(c.servType||'No service')+(c.approach?' · '+c.approach:'')+(c.authCode?' · Auth: '+c.authCode:'')+' · ICD: '+(c.icd||'—')+'</div>'
+      + (who ? '<div class="cmeta">Assigned: '+who+'</div>' : '')
+      + '</div>'
+      + '<div class="cacts">'
+      + (isAdmin() ? '<button class="btn-s" onclick="openAssign('+i+')">Assign</button>' : '')
+      + '<button class="btn-s" onclick="editChild('+i+')">Edit</button>'
       + '<button class="btn-s" style="color:var(--primary);border-color:var(--primary);" onclick="showAuthSummary('+i+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:5px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Auth Hours</button>'
       + '<button class="btn-d" onclick="deleteChild('+i+')">x</button></div>'
       + '</div>';
@@ -2115,11 +2147,52 @@ function renderChildSel(){
   var sel = document.getElementById('childSel');
   var cur = sel.value;
   sel.innerHTML = '<option value="">— Select Child —</option>';
-  children.forEach(function(c,i){
-    var o = document.createElement('option'); o.value = i; o.textContent = c.name; sel.appendChild(o);
+  visibleChildIdx().forEach(function(i){
+    var o = document.createElement('option'); o.value = i; o.textContent = children[i].name; sel.appendChild(o);
   });
   if(cur !== '') sel.value = cur;
   renderSlogChildSel();
+}
+
+// ── CASE ASSIGNMENT ───────────────────────────────────────────
+function openAssign(idx){
+  var c = children[idx];
+  var staff = usersLoad().filter(function(u){ return u.role !== 'admin'; });
+  if(!staff.length) return alert('Add therapists or service coordinators under Staff first.');
+  var cur = c.assigned || [];
+  var panel = document.createElement('div');
+  panel.id = 'assignPanel';
+  panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9997;display:flex;align-items:center;justify-content:center;padding:20px;';
+  panel.innerHTML = '<div style="background:#fff;border-radius:14px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2);">'
+    + '<div class="slabel" style="margin-bottom:4px;">Assign ' + c.name + '</div>'
+    + '<div style="font-size:.76rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Staff selected here see this child. With nobody selected the child stays visible to everyone.</div>'
+    + staff.map(function(u){
+        var on = cur.indexOf(u.id) !== -1;
+        return '<label style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer;">'
+          + '<input type="checkbox" class="assign-cb" value="'+u.id+'"'+(on?' checked':'')+' style="width:18px;height:18px;accent-color:var(--primary);"/>'
+          + '<span><span style="font-weight:600;font-size:.88rem;">'+userFullName(u)+'</span>'
+          + '<span class="role-badge role-'+u.role+'" style="margin-left:8px;">'+ROLE_LABELS[u.role]+'</span></span></label>';
+      }).join('')
+    + '<button class="btn-p" style="margin-top:16px;" onclick="saveAssign('+idx+')">Save Assignment</button>'
+    + '<button class="btn-s" style="margin-top:8px;width:100%;" onclick="closeAssign()">Cancel</button>'
+    + '</div>';
+  document.body.appendChild(panel);
+}
+
+function closeAssign(){
+  var p = document.getElementById('assignPanel');
+  if(p) p.remove();
+}
+
+function saveAssign(idx){
+  var picked = [];
+  document.querySelectorAll('#assignPanel .assign-cb').forEach(function(cb){
+    if(cb.checked) picked.push(cb.value);
+  });
+  children[idx].assigned = picked;
+  localStorage.setItem('ei_c4', JSON.stringify(children));
+  closeAssign();
+  renderChildList(); renderChildSel();
 }
 
 // Shows script coverage for the selected child + date while the note is being
@@ -2477,8 +2550,8 @@ function renderSlogChildSel(){
   if(!sel) return;
   var cur = sel.value;
   sel.innerHTML = '<option value="">— Select Child —</option>';
-  children.forEach(function(c,i){
-    var o = document.createElement('option'); o.value = i; o.textContent = c.name; sel.appendChild(o);
+  visibleChildIdx().forEach(function(i){
+    var o = document.createElement('option'); o.value = i; o.textContent = children[i].name; sel.appendChild(o);
   });
   if(cur !== '') sel.value = cur;
 }
@@ -2793,7 +2866,7 @@ function renderBillingChildSel(){
   if(!sel) return;
   var cur = sel.value;
   sel.innerHTML = '<option value="">— Select Child —</option>';
-  children.forEach(function(c,i){ sel.innerHTML += '<option value="'+i+'">'+c.name+'</option>'; });
+  visibleChildIdx().forEach(function(i){ sel.innerHTML += '<option value="'+i+'">'+children[i].name+'</option>'; });
   if(cur) sel.value = cur;
 }
 
@@ -3269,7 +3342,7 @@ function buildAlerts(){
   var scripts = scriptsLoad();
   var today = todayStr();
 
-  children.forEach(function(c){
+  visibleChildIdx().map(function(i){ return children[i]; }).forEach(function(c){
     var serv = c.servType || '';
 
     // — Physician order coverage —
@@ -3846,8 +3919,8 @@ function renderRxSelects(){
   var cs=document.getElementById('rxChild'); if(!cs) return;
   var curC=cs.value;
   cs.innerHTML='<option value="">— Select Child —</option>';
-  children.forEach(function(c){
-    var o=document.createElement('option'); o.value=c.name; o.textContent=c.name; cs.appendChild(o);
+  visibleChildIdx().forEach(function(i){
+    var o=document.createElement('option'); o.value=children[i].name; o.textContent=children[i].name; cs.appendChild(o);
   });
   if(curC) cs.value=curC;
   var ds=document.getElementById('rxDoctor'); var curD=ds.value;
@@ -4150,9 +4223,9 @@ function renderScChildSel(){
   if(!sel) return;
   var cur = sel.value;
   sel.innerHTML = '<option value="">— Select Child —</option>';
-  children.forEach(function(c,i){
+  visibleChildIdx().forEach(function(i){
     var o = document.createElement('option');
-    o.value = i; o.textContent = c.name;
+    o.value = i; o.textContent = children[i].name;
     sel.appendChild(o);
   });
   if(cur && children[parseInt(cur)]) sel.value = cur;
