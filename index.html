@@ -1552,7 +1552,8 @@
       <div id="billError" style="display:none;background:rgba(220,38,38,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:10px;font-size:.82rem;color:#dc2626;"></div>
     </div>
 
-    <!-- RATE SCHEDULE -->
+    <!-- RATE SCHEDULE (admin only -- reimbursement amounts are not shown to clinicians) -->
+    <div id="rateSection">
     <div class="div" style="margin-top:26px;"></div>
     <div class="slabel">Rate Schedule</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Amount billed per 15-minute unit. Service coordination pays a different rate from therapy, so each code is priced separately.</div>
@@ -1607,6 +1608,7 @@
     </div>
     <div id="rateEmpty" class="ibox" style="margin-top:12px;">No rates configured yet.</div>
     <div id="rateList" style="margin-top:12px;"></div>
+    </div>
   </div>
 
   </div><!-- end pages-wrap -->
@@ -1738,8 +1740,14 @@ function showPage(page, el){
   }
   if(el) el.classList.add('active');
   if(page === 'servicelog'){ renderSlogChildSel(); renderServiceLog(); }
-  if(page === 'billing'){ renderBillingChildSel(); renderRates();
-    document.getElementById('rateFormWrap').style.display = isAdmin() ? '' : 'none'; }
+  if(page === 'billing'){
+    renderBillingChildSel();
+    // Reimbursement amounts are agency business, not clinical information, so
+    // the whole schedule is hidden from anyone who is not an admin.
+    var showRates = isAdmin();
+    document.getElementById('rateSection').style.display = showRates ? '' : 'none';
+    if(showRates){ renderRates(); document.getElementById('rateFormWrap').style.display = ''; }
+  }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
   if(page === 'users'){ renderUsers(); }
   if(page === 'scripts'){
