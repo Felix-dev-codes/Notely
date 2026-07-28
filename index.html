@@ -415,6 +415,7 @@
   <!-- TOP STRIP NAV (Profile / Children / Note) -->
   <div class="nav-strip" id="mainNav">
     <div class="nav-strip-tab active" onclick="showPage('note',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>Note</div>
+    <div class="nav-strip-tab" onclick="showPage('alerts',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>Alerts<span id="alertCount" style="display:none;background:var(--red);color:#fff;font-family:var(--mono);font-size:.58rem;padding:1px 5px;border-radius:10px;margin-left:5px;vertical-align:middle;"></span></div>
     <div class="nav-strip-tab" onclick="showPage('scripts',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15h6"/><path d="M12 12v6"/></svg></span>Scripts</div>
     <div class="nav-strip-tab" data-role="admin" onclick="showPage('users',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/></svg></span>Staff</div>
     <div class="nav-strip-tab" onclick="showPage('sc',this)"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;vertical-align:middle;margin-right:6px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>SC Note</div>
@@ -1202,6 +1203,10 @@
           <div class="field-label">License #</div>
           <input type="text" id="uLic" placeholder="License number"/>
         </div>
+        <div class="field-group">
+          <div class="field-label">License Expires</div>
+          <input type="date" id="uLicExp"/>
+        </div>
       </div>
       <div class="g2">
         <div class="field-group">
@@ -1247,6 +1252,30 @@
       <div class="slabel">Staff List</div>
       <div id="uEmpty" class="ibox">No staff added yet.</div>
       <div id="uList"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ COMPLIANCE ALERTS PAGE ══════════ -->
+  <div class="page" id="page-alerts">
+    <div class="inner-pad">
+      <div class="slabel" style="margin-top:8px;">Compliance Alerts</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:16px;line-height:1.5;">Problems found before they reach a claim — lapsed orders, exhausted authorizations, and sessions that would be rejected as duplicates.</div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:90px;background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:10px;padding:10px;text-align:center;">
+          <div style="font-size:1.4rem;font-weight:700;color:#c53030;" id="alertCritCount">0</div>
+          <div style="font-size:.65rem;color:var(--muted);">Blocking</div>
+        </div>
+        <div style="flex:1;min-width:90px;background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:10px;padding:10px;text-align:center;">
+          <div style="font-size:1.4rem;font-weight:700;color:#b45309;" id="alertWarnCount">0</div>
+          <div style="font-size:.65rem;color:var(--muted);">Expiring soon</div>
+        </div>
+        <div style="flex:1;min-width:90px;background:var(--light);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;">
+          <div style="font-size:1.4rem;font-weight:700;color:var(--text);" id="alertInfoCount">0</div>
+          <div style="font-size:.65rem;color:var(--muted);">To review</div>
+        </div>
+      </div>
+      <div id="alertsEmpty" class="ibox" style="display:none;">Nothing needs attention. Scripts and authorizations are current, and no duplicate sessions were found.</div>
+      <div id="alertsList"></div>
     </div>
   </div>
 
@@ -1716,6 +1745,7 @@ window.addEventListener('DOMContentLoaded', function(){
   checkHipaa();
   renderHistory();
   renderAttendance();
+  try{ updateAlertBadge(buildAlerts().filter(function(a){return a.sev==='crit';}).length); }catch(e){}
 });
 
 // ── HIPAA ─────────────────────────────────────────────────────
@@ -1771,6 +1801,7 @@ function showPage(page, el){
   }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
   if(page === 'users'){ renderUsers(); }
+  if(page === 'alerts'){ renderAlerts(); }
   if(page === 'scripts'){
     renderDoctors(); renderRxSelects(); renderScripts(); loadEIOForm();
     document.getElementById('eioFormWrap').style.display = isAdmin() ? '' : 'none';
@@ -3216,6 +3247,185 @@ function copyBlk(id, btn){
   });
 }
 
+// ── COMPLIANCE ALERTS ─────────────────────────────────────────
+// Every check here is a claim that would otherwise be denied after the work
+// was already done. Severity is what it costs: 'crit' blocks billing now,
+// 'warn' will block shortly, 'info' is money sitting uncollected.
+var ALERT_HORIZON_DAYS = 30;
+
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  var d = new Date(dateStr+'T00:00:00'), t = new Date();
+  t.setHours(0,0,0,0);
+  return Math.round((d - t) / 86400000);
+}
+
+// Minutes a note ran, from its stored header.
+function noteMins(n){ return headerMins(n.header||''); }
+
+function buildAlerts(){
+  var out = [];
+  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var scripts = scriptsLoad();
+  var today = todayStr();
+
+  children.forEach(function(c){
+    var serv = c.servType || '';
+
+    // — Physician order coverage —
+    if(serv && EXEMPT_FROM_SCRIPT.indexOf(serv) === -1){
+      var mine = scripts.filter(function(r){ return r.childName===c.name && r.discipline===serv; });
+      if(!mine.length){
+        out.push({sev:'crit', cat:'Script', who:c.name,
+          msg:'No '+serv+' script on file. Sessions cannot be billed.', act:'scripts'});
+      } else {
+        var current = mine.filter(function(r){ return r.startDate <= today && today <= r.endDate; });
+        if(!current.length){
+          var latest = mine.slice().sort(function(a,b){ return b.endDate.localeCompare(a.endDate); })[0];
+          out.push({sev:'crit', cat:'Script', who:c.name,
+            msg:serv+' script lapsed on '+latest.endDate+'. Sessions from that date cannot be billed.', act:'scripts'});
+        } else {
+          var d = daysUntil(current[0].endDate);
+          if(d !== null && d <= ALERT_HORIZON_DAYS){
+            out.push({sev:'warn', cat:'Script', who:c.name,
+              msg:serv+' script expires in '+d+' day'+(d===1?'':'s')+' ('+current[0].endDate+').', act:'scripts'});
+          }
+        }
+      }
+    }
+
+    // — Authorizations: window and hours consumed —
+    (c.auths||[]).forEach(function(a){
+      if(!a.num && !a.hours) return;
+      var label = 'Auth '+(a.num||'(no number)')+(a.serv?' · '+a.serv:'');
+      if(a.end){
+        var ad = daysUntil(a.end);
+        if(ad !== null && ad < 0){
+          out.push({sev:'crit', cat:'Authorization', who:c.name,
+            msg:label+' expired '+a.end+'.', act:'children'});
+        } else if(ad !== null && ad <= ALERT_HORIZON_DAYS){
+          out.push({sev:'warn', cat:'Authorization', who:c.name,
+            msg:label+' expires in '+ad+' day'+(ad===1?'':'s')+' ('+a.end+').', act:'children'});
+        }
+      }
+      var total = parseFloat(a.hours||0);
+      if(total > 0){
+        var used = 0;
+        notes.forEach(function(n){
+          if(n.childName !== c.name) return;
+          if(n.status === 'cancelled') return;
+          // Match the note's service to this authorisation where both are known
+          if(a.serv && n.servType && a.serv.split('(')[0].trim() !== n.servType.split('(')[0].trim()) return;
+          var m = noteMins(n);
+          if(m > 0) used += m/60;
+        });
+        var pct = Math.round((used/total)*100);
+        if(used >= total){
+          out.push({sev:'crit', cat:'Authorization', who:c.name,
+            msg:label+' fully used — '+used.toFixed(1)+' of '+total+' hours ('+pct+'%). Further sessions are unauthorised.', act:'children'});
+        } else if(pct >= 90){
+          out.push({sev:'warn', cat:'Authorization', who:c.name,
+            msg:label+' at '+pct+'% — '+(total-used).toFixed(1)+' hours left of '+total+'.', act:'children'});
+        }
+      }
+    });
+  });
+
+  // — Duplicate and overlapping sessions —
+  // Same child on the same date with overlapping clock times is a denial, and
+  // an identical date/time pair usually means the note was saved twice.
+  var byChildDate = {};
+  notes.forEach(function(n){
+    if(n.status === 'cancelled') return;
+    var k = n.childName+'|'+n.sessDate;
+    (byChildDate[k] = byChildDate[k] || []).push(n);
+  });
+  Object.keys(byChildDate).forEach(function(k){
+    var group = byChildDate[k];
+    if(group.length < 2) return;
+    var parts = k.split('|');
+    var spans = group.map(function(n){
+      var t = hdrField(n.header,'Time').split('-');
+      function mins(x){ var m=(x||'').match(/(\d+):(\d+)\s*(AM|PM)?/i); if(!m) return null;
+        var h=parseInt(m[1])%12; if(m[3]&&m[3].toUpperCase()==='PM') h+=12; return h*60+parseInt(m[2]); }
+      return {a:mins(t[0]), b:mins(t[1]), raw:hdrField(n.header,'Time')};
+    }).filter(function(s){ return s.a !== null && s.b !== null; });
+    for(var i=0;i<spans.length;i++){
+      for(var j=i+1;j<spans.length;j++){
+        if(spans[i].a < spans[j].b && spans[j].a < spans[i].b){
+          var same = spans[i].raw === spans[j].raw;
+          out.push({sev:'crit', cat:same?'Duplicate':'Overlap', who:parts[0],
+            msg:(same ? 'Two sessions recorded identically on ' : 'Overlapping sessions on ')
+              + parts[1]+' — '+spans[i].raw+' and '+spans[j].raw
+              + (same ? '. Billing both would be a duplicate claim.' : '. One child cannot receive both at once.'),
+            act:'history'});
+          i = spans.length; break;
+        }
+      }
+    }
+  });
+
+  // — Work delivered but not yet billed —
+  var unbilled = notes.filter(function(n){ return !n.billed && n.status !== 'cancelled'; }).length;
+  if(unbilled) out.push({sev:'info', cat:'Billing', who:'',
+    msg:unbilled+' session'+(unbilled===1?'':'s')+' documented but not yet billed.', act:'billing'});
+  var scUnbilled = scLoad().filter(function(n){ return !n.billed; }).length;
+  if(scUnbilled) out.push({sev:'info', cat:'Billing', who:'',
+    msg:scUnbilled+' service coordination contact'+(scUnbilled===1?'':'s')+' not yet billed.', act:'billing'});
+
+  // — Staff credentials —
+  usersLoad().forEach(function(u){
+    if(!u.licExp) return;
+    var d = daysUntil(u.licExp);
+    if(d === null) return;
+    if(d < 0) out.push({sev:'crit', cat:'Credential', who:userFullName(u),
+      msg:'License expired '+u.licExp+'.', act:'users'});
+    else if(d <= ALERT_HORIZON_DAYS) out.push({sev:'warn', cat:'Credential', who:userFullName(u),
+      msg:'License expires in '+d+' day'+(d===1?'':'s')+' ('+u.licExp+').', act:'users'});
+  });
+
+  var rank = {crit:0, warn:1, info:2};
+  out.sort(function(a,b){ return rank[a.sev]-rank[b.sev] || a.cat.localeCompare(b.cat); });
+  return out;
+}
+
+function renderAlerts(){
+  var list = document.getElementById('alertsList');
+  if(!list) return;
+  var alerts = buildAlerts();
+  var counts = {crit:0, warn:0, info:0};
+  alerts.forEach(function(a){ counts[a.sev]++; });
+  document.getElementById('alertCritCount').textContent = counts.crit;
+  document.getElementById('alertWarnCount').textContent = counts.warn;
+  document.getElementById('alertInfoCount').textContent = counts.info;
+  document.getElementById('alertsEmpty').style.display = alerts.length ? 'none' : 'block';
+
+  var style = {
+    crit:{bg:'rgba(239,68,68,.08)', bd:'var(--red)', fg:'#c53030'},
+    warn:{bg:'rgba(245,158,11,.1)', bd:'#f59e0b', fg:'#b45309'},
+    info:{bg:'var(--light)', bd:'var(--border)', fg:'var(--muted)'}
+  };
+  list.innerHTML = alerts.map(function(a){
+    var st = style[a.sev];
+    return '<div style="background:'+st.bg+';border:1px solid '+st.bd+';border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">'
+      + '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;color:'+st.fg+';">'+a.cat+(a.who?' · '+a.who:'')+'</div>'
+      + '<button class="btn-s" style="font-size:.65rem;padding:3px 8px;flex-shrink:0;" onclick="showPage(\''+a.act+'\')">Open</button>'
+      + '</div>'
+      + '<div style="font-size:.82rem;color:var(--text);line-height:1.45;margin-top:3px;">'+a.msg+'</div>'
+      + '</div>';
+  }).join('');
+  updateAlertBadge(counts.crit);
+}
+
+// Blocking count rides on the tab so problems surface without opening it.
+function updateAlertBadge(crit){
+  var b = document.getElementById('alertCount');
+  if(!b) return;
+  if(crit > 0){ b.textContent = crit; b.style.display = 'inline-block'; }
+  else b.style.display = 'none';
+}
+
 // ── RATE SCHEDULE ─────────────────────────────────────────────
 // Billed amount per 15-minute unit, keyed by procedure code. Service
 // coordination (T1017) pays a different rate from therapy, and the EI-Hub
@@ -3750,9 +3960,9 @@ function checkScriptCoverage(childName, discipline, dateStr){
 var ROLE_LABELS = {admin:'Agency Admin', therapist:'Therapist', coordinator:'Service Coordinator'};
 // Which tabs each role may open. Admin sees everything.
 var ROLE_TABS = {
-  admin:       ['note','sc','users','scripts','children','profile','history','attendance','servicelog','billing'],
-  therapist:   ['note','scripts','children','profile','history','attendance','servicelog','billing'],
-  coordinator: ['sc','scripts','children','profile','history','billing']
+  admin:       ['note','sc','alerts','users','scripts','children','profile','history','attendance','servicelog','billing'],
+  therapist:   ['note','alerts','scripts','children','profile','history','attendance','servicelog','billing'],
+  coordinator: ['sc','alerts','scripts','children','profile','history','billing']
 };
 // Only an admin edits the registries; everyone else sees them read-only.
 function isAdmin(){ return !activeUser || activeUser.role === 'admin'; }
@@ -3769,7 +3979,7 @@ function saveUser(){
   var rec = {
     id: editUserId || uid('u'),
     firstName:g('uFirst'), lastName:g('uLast'), role:g('uRole')||'therapist',
-    npi:g('uNPI'), cred:g('uCred'), lic:g('uLic'),
+    npi:g('uNPI'), cred:g('uCred'), lic:g('uLic'), licExp:g('uLicExp'),
     agency:g('uAgency'), taxId:g('uTaxID'),
     street:g('uStreet'), city:g('uCity'), state:g('uState'), zip:g('uZip'), phone:g('uPhone')
   };
@@ -3793,7 +4003,7 @@ function editUser(id){
   if(!u) return;
   editUserId = id;
   s('uFirst',u.firstName); s('uLast',u.lastName); s('uRole',u.role);
-  s('uNPI',u.npi); s('uCred',u.cred); s('uLic',u.lic);
+  s('uNPI',u.npi); s('uCred',u.cred); s('uLic',u.lic); s('uLicExp',u.licExp);
   s('uAgency',u.agency); s('uTaxID',u.taxId);
   s('uStreet',u.street); s('uCity',u.city); s('uState',u.state); s('uZip',u.zip); s('uPhone',u.phone);
   document.getElementById('uFormLbl').textContent = 'Editing: '+userFullName(u);
@@ -3804,7 +4014,7 @@ function editUser(id){
 
 function cancelUserEdit(){
   editUserId = null;
-  ['uFirst','uLast','uNPI','uCred','uLic','uAgency','uTaxID','uStreet','uCity','uState','uZip','uPhone'].forEach(function(id){ s(id,''); });
+  ['uFirst','uLast','uNPI','uCred','uLic','uAgency','uTaxID','uStreet','uCity','uState','uZip','uPhone','uLicExp'].forEach(function(id){ s(id,''); });
   s('uRole','therapist');
   document.getElementById('uFormLbl').textContent = 'Add Staff Member';
   document.getElementById('uSaveTxt').textContent = 'Add Staff Member';
