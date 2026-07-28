@@ -1544,12 +1544,27 @@
       </div>
       <div class="g2">
         <div class="field-group">
+          <div class="field-label">Billing Basis</div>
+          <select id="rateBasis" onchange="onRateBasisChange()">
+            <option value="unit">Per unit (rate multiplies by units)</option>
+            <option value="session">Per session length (fixed price)</option>
+          </select>
+        </div>
+        <div class="field-group" id="rateUnitMinWrap">
           <div class="field-label">Minutes Per Unit</div>
           <select id="rateUnitMin">
             <option value="15">15 minutes</option>
             <option value="30">30 minutes</option>
             <option value="60">60 minutes</option>
           </select>
+        </div>
+        <div class="field-group" id="rateSessionWrap" style="display:none;">
+          <div class="field-label">Session Length (minutes)</div>
+          <input type="text" id="rateSessionMin" placeholder="e.g. 60"/>
+        </div>
+        <div class="field-group" id="rateUnitsWrap" style="display:none;">
+          <div class="field-label">Units To Report</div>
+          <input type="text" id="rateUnits" placeholder="e.g. 1"/>
         </div>
         <div class="field-group">
           <div class="field-label">Modifier <span style="color:var(--muted);font-weight:400;">(blank for none)</span></div>
@@ -2730,9 +2745,9 @@ function renderBillingSession(){
     var placeOfSvc = pos ? pos[1].trim().split(' ')[0] : '12';
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length === 2 ? toMins(parts[1].trim()) - toMins(parts[0].trim()) : 0;
-    var rt = cptCode ? getRate(cptCode) : null;
-    var units = rt ? calcUnits(mins, rt.unitMin) : 0;
-    var amount = rt ? (units * rt.rate).toFixed(2) : '0.00';
+    var pr = priceSession(cptCode, mins);
+    var units = pr.error ? 0 : pr.units;
+    var amount = pr.error ? '0.00' : pr.amount.toFixed(2);
     totalUnits += units;
     totalAmount += parseFloat(amount);
     var billedBadge = n.billed ? '<span style="background:rgba(22,163,74,.1);color:#15803d;font-size:.65rem;padding:2px 6px;border-radius:10px;margin-left:6px;">Billed</span>' : '';
@@ -2741,17 +2756,17 @@ function renderBillingSession(){
       + '<div style="font-weight:600;">'+n.sessDate+billedBadge+'</div>'
       + '<div style="font-family:var(--mono);font-size:.7rem;color:var(--primary);">'+units+' units · $'+amount+'</div>'
       + '</div>'
-      + '<div style="color:var(--muted);font-size:.76rem;">Time: '+timeStr+' · CPT: '+cptCode+' · Visit: '+visitType+' · POS: '+placeOfSvc
-      + ' · '+(rt?rt.unitMin:15)+' min/unit @ $'+(rt?rt.rate.toFixed(2):'0.00')+'</div>'
+      + '<div style="color:var(--muted);font-size:.76rem;">Time: '+timeStr+' · CPT: '+(cptCode||'—')+' · Visit: '+visitType+' · POS: '+placeOfSvc
+      + (pr.error ? '' : ' · '+(pr.basis==='session' ? mins+'-min session rate' : 'per unit')+' @ $'+pr.amount.toFixed(2))+'</div>'
       // A code with no row of its own is priced by the catch-all, which is
       // wrong whenever that service uses a different unit length or rate.
-      + (!cptCode
+      + (pr.error
           ? '<div style="margin-top:6px;background:rgba(239,68,68,.08);border:1px solid var(--red);border-radius:6px;padding:6px 8px;font-size:.72rem;color:#c53030;">'
-            + 'No CPT code on this note — it cannot be billed until one is set.</div>'
+            + pr.error + ' This session cannot be billed.</div>'
           : '')
-      + (cptCode && rt && rt.code === '*'
+      + (!pr.error && pr.isDefault
           ? '<div style="margin-top:6px;background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:6px;padding:6px 8px;font-size:.72rem;color:#b45309;">'
-            + 'No rate set for '+cptCode+' — using the default. Add it below if this service has its own rate or unit length.</div>'
+            + 'No rate set for '+cptCode+' — using the default. Add it below if this service has its own rate or session pricing.</div>'
           : '')
       + '</div>';
   });
@@ -2814,8 +2829,12 @@ function generate837P(){
     if(res.blocked) blocked.push(n.sessDate+' — '+res.reason);
     // A missing procedure code used to fall back to 97155, which bills the
     // session as Special Instruction regardless of what was delivered.
-    if(!(n.header||'').match(/CPT: *[A-Za-z0-9]/))
+    if(!(n.header||'').match(/CPT: *[A-Za-z0-9]/)){
       blocked.push(n.sessDate+' — no CPT code on this note.');
+    } else {
+      var pchk = priceSession(hdrField(n.header,'CPT').split(' ')[0], headerMins(n.header));
+      if(pchk.error) blocked.push(n.sessDate+' — '+pchk.error);
+    }
     // Remember which physician ordered this session so Loop 2310A can name
     // them as the referring provider rather than the treating therapist.
     referringFor[n.sessDate] = res.script ? findDoctor(res.script.doctorId) : null;
@@ -2886,9 +2905,9 @@ function generate837P(){
     var cptCode = cptM ? cptM[1].trim().split(' ')[0] : '';
     // Must come after cptCode is known, or every line silently prices at the
     // default rate and modifier.
-    var rt = getRate(cptCode);
-    var units = calcUnits(mins, rt ? rt.unitMin : 15);
-    var amount = rt ? (units*rt.rate).toFixed(2) : '0.00';
+    var pr = priceSession(cptCode, mins);
+    var units = pr.units;
+    var amount = pr.amount.toFixed(2);
     var vtM = n.header.match(/Visit Type: ([^\n]+)/);
     var visitType = vtM ? vtM[1].trim() : 'CV1';
     var posM = n.header.match(/Place of Service: ([^\n]+)/);
@@ -2916,7 +2935,7 @@ function generate837P(){
     // Loop 2310B — rendering provider is the clinician who delivered the service
     seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
     seg.push('LX*1');
-    seg.push('SV1*HC:'+cptCode+(rt && rt.mod ? ':'+rt.mod : '')+'*'+amount+'*UN*'+units+'***1');
+    seg.push('SV1*HC:'+cptCode+(pr.mod ? ':'+pr.mod : '')+'*'+amount+'*UN*'+units+'***1');
     seg.push('DTP*472*D8*'+sessDateFmt);
     seg.push('REF*6R*'+claimId+'L1');
   });
@@ -3060,19 +3079,84 @@ function ratesSave(a){ localStorage.setItem('ei_rates_v4', JSON.stringify(a)); }
 function seedRates(){
   var arr = ratesLoad();
   var known = [
-    {code:'*',     rate:27.84, mod:'96', unitMin:15, desc:'Default for unlisted codes — verify against your rate schedule'},
-    {code:'T1017', rate:19.09, mod:'',   unitMin:15, desc:'Service coordination — $76.36/hr'},
-    {code:'97155', rate:27.84, mod:'96', unitMin:15, desc:'Special Instruction — $111.35/hr'},
-    {code:'92507', rate:83.78, mod:'96', unitMin:30, desc:'Speech-language therapy — $167.56/hr'}
+    {code:'*',     basis:'unit',    rate:27.84, mod:'96', unitMin:15, desc:'Default for unlisted codes — verify against your rate schedule'},
+    {code:'T1017', basis:'unit',    rate:19.09, mod:'',   unitMin:15, desc:'Service coordination — $76.36/hr'},
+    {code:'97155', basis:'unit',    rate:27.84, mod:'96', unitMin:15, desc:'Special Instruction — $111.35/hr'},
+    // Speech is priced by session length, not per unit -- 60 minutes pays
+    // $116.66, not two 30-minute units at $167.56 -- so each duration is its
+    // own row and any other length blocks rather than being mis-priced.
+    {code:'92507', basis:'session', rate:83.78,  mod:'96', sessionMin:30, units:1, desc:'Speech-language therapy, 30-minute session'},
+    {code:'92507', basis:'session', rate:116.66, mod:'96', sessionMin:60, units:1, desc:'Speech-language therapy, 60-minute session'}
   ];
   var added = false;
   known.forEach(function(k){
-    var exists = arr.filter(function(r){ return (r.code||'').toUpperCase() === k.code; }).length;
+    // A code can hold several rows (one per session length), so match on the
+    // session length too, or only the first duration would ever seed.
+    var exists = arr.filter(function(r){
+      if((r.code||'').toUpperCase() !== k.code) return false;
+      if(k.basis === 'session') return r.basis === 'session' && parseInt(r.sessionMin) === k.sessionMin;
+      return r.basis !== 'session';
+    }).length;
     if(exists) return;
-    arr.push({id:uid('rt'), code:k.code, rate:k.rate, mod:k.mod, unitMin:k.unitMin, desc:k.desc});
+    arr.push({id:uid('rt'), code:k.code, basis:k.basis, rate:k.rate, mod:k.mod,
+              unitMin:k.unitMin||15, sessionMin:k.sessionMin||null, units:k.units||1, desc:k.desc});
     added = true;
   });
   if(added) ratesSave(arr);
+}
+
+// Prices one session. Two kinds of row:
+//   basis 'unit'    — linear: units = ceil(mins/unitMin), amount = units * rate
+//   basis 'session' — a fixed price and unit count for one session length
+// A code priced by session length that has no row for the duration worked is
+// an error, never a fall-through to the linear default -- that is exactly how
+// a 60-minute speech session would silently bill as two 30-minute units.
+// Reads a "Label: value" line out of a saved note header without regex, so
+// there is no escaping to get wrong.
+function hdrField(header, name){
+  var lines = (header||'').split('\n');
+  for(var i=0;i<lines.length;i++){
+    var line = lines[i];
+    if(line.indexOf(name+':') === 0) return line.slice(name.length+1).trim();
+  }
+  return '';
+}
+
+// Session length in minutes from the header's "Time: 9:00 AM - 10:00 AM" line.
+function headerMins(header){
+  var parts = hdrField(header,'Time').split('-');
+  if(parts.length !== 2) return 0;
+  function toMins(t){
+    var m = (t||'').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if(!m) return 0;
+    var h = parseInt(m[1]) % 12;
+    if(m[3] && m[3].toUpperCase() === 'PM') h += 12;
+    return h*60 + parseInt(m[2]);
+  }
+  return toMins(parts[1]) - toMins(parts[0]);
+}
+
+function priceSession(code, mins){
+  seedRates();
+  var arr = ratesLoad();
+  var c = (code||'').toUpperCase().trim();
+  if(!c) return {error:'No CPT code on this note.'};
+  var rows = arr.filter(function(r){ return (r.code||'').toUpperCase() === c; });
+  var sessionRows = rows.filter(function(r){ return r.basis === 'session'; });
+  if(sessionRows.length){
+    var hit = sessionRows.filter(function(r){ return parseInt(r.sessionMin) === mins; })[0];
+    if(!hit){
+      return {error:'No '+c+' rate configured for a '+mins+'-minute session. Configured: '
+        + sessionRows.map(function(r){ return r.sessionMin+' min'; }).join(', ')+'.'};
+    }
+    return {units:parseInt(hit.units||1), amount:parseFloat(hit.rate),
+            mod:hit.mod||'', basis:'session', row:hit};
+  }
+  var unitRow = rows[0] || arr.filter(function(r){ return r.code === '*'; })[0];
+  if(!unitRow) return {error:'No rate configured for '+c+'.'};
+  var u = calcUnits(mins, unitRow.unitMin);
+  return {units:u, amount:u * parseFloat(unitRow.rate), mod:unitRow.mod||'',
+          basis:'unit', isDefault:(unitRow.code === '*'), row:unitRow};
 }
 
 // Returns {rate, mod, code} or null when nothing covers the code.
@@ -3096,17 +3180,37 @@ function getRate(code){
   return hit ? {rate:parseFloat(hit.rate), mod:(hit.mod||''), unitMin:parseInt(hit.unitMin||15), code:hit.code} : null;
 }
 
+function onRateBasisChange(){
+  var sess = g('rateBasis') === 'session';
+  document.getElementById('rateUnitMinWrap').style.display = sess ? 'none' : '';
+  document.getElementById('rateSessionWrap').style.display = sess ? '' : 'none';
+  document.getElementById('rateUnitsWrap').style.display   = sess ? '' : 'none';
+}
+
 function saveRate(){
   var code = g('rateCode').toUpperCase().replace(/[^A-Z0-9*]/g,'');
   if(!code) return showError('rateError','Enter a CPT/HCPCS code, or * for the default.');
   var amt = parseFloat(g('rateAmt'));
   if(isNaN(amt) || amt <= 0) return showError('rateError','Enter a rate greater than zero.');
   var arr = ratesLoad();
-  var dupe = arr.filter(function(r){ return r.code.toUpperCase()===code && r.id!==editRateId; })[0];
-  if(dupe) return showError('rateError','A rate for '+code+' already exists.');
-  var rec = {id: editRateId || uid('rt'), code:code, rate:amt,
+  var dupe = arr.filter(function(r){
+    if(r.code.toUpperCase()!==code || r.id===editRateId) return false;
+    if(basis==='session' && r.basis==='session') return parseInt(r.sessionMin)===sessionMin;
+    return basis!=='session' && r.basis!=='session';
+  })[0];
+  if(dupe) return showError('rateError', basis==='session'
+    ? 'A '+sessionMin+'-minute rate for '+code+' already exists.'
+    : 'A per-unit rate for '+code+' already exists.');
+  var basis = g('rateBasis')||'unit';
+  var sessionMin = parseInt(g('rateSessionMin')||'0');
+  if(basis === 'session' && !(sessionMin > 0))
+    return showError('rateError','Enter the session length in minutes.');
+  var rec = {id: editRateId || uid('rt'), code:code, basis:basis, rate:amt,
              mod:g('rateMod').replace(/[^A-Za-z0-9]/g,''),
-             unitMin:parseInt(g('rateUnitMin')||'15'), desc:g('rateDesc')};
+             unitMin:parseInt(g('rateUnitMin')||'15'),
+             sessionMin:(basis==='session'?sessionMin:null),
+             units:(basis==='session'?Math.max(1,parseInt(g('rateUnits')||'1')):1),
+             desc:g('rateDesc')};
   if(editRateId){ for(var i=0;i<arr.length;i++){ if(arr[i].id===editRateId){ arr[i]=rec; break; } } }
   else arr.push(rec);
   ratesSave(arr);
@@ -3119,6 +3223,8 @@ function editRate(id){
   editRateId = id;
   s('rateCode',r.code); s('rateAmt',r.rate); s('rateMod',r.mod); s('rateDesc',r.desc);
   s('rateUnitMin',String(r.unitMin||15));
+  s('rateBasis',r.basis||'unit'); s('rateSessionMin',r.sessionMin||''); s('rateUnits',r.units||1);
+  onRateBasisChange();
   document.getElementById('rateSaveTxt').textContent='Update Rate';
   document.getElementById('rateCancelBtn').style.display='block';
 }
@@ -3126,7 +3232,8 @@ function editRate(id){
 function cancelRateEdit(){
   editRateId=null;
   ['rateCode','rateAmt','rateMod','rateDesc'].forEach(function(i){ s(i,''); });
-  s('rateUnitMin','15');
+  s('rateUnitMin','15'); s('rateBasis','unit'); s('rateSessionMin',''); s('rateUnits','');
+  onRateBasisChange();
   document.getElementById('rateSaveTxt').textContent='Add Rate';
   document.getElementById('rateCancelBtn').style.display='none';
 }
@@ -3151,7 +3258,9 @@ function renderRates(){
   if(empty) empty.style.display='none';
   list.innerHTML = arr.map(function(r){
     var label = (r.code==='*' ? 'Default (unlisted codes)' : r.code + (r.mod?' · modifier '+r.mod:' · no modifier'))
-      + ' · ' + (r.unitMin||15) + ' min/unit';
+      + ' · ' + (r.basis==='session'
+          ? r.sessionMin+' min session → '+(r.units||1)+' unit'+((r.units||1)==1?'':'s')
+          : (r.unitMin||15)+' min/unit');
     return '<div class="ucard"><div><div class="cname">$'+parseFloat(r.rate).toFixed(2)+' <span style="font-weight:400;font-size:.78rem;color:var(--muted);">per unit</span></div>'
       + '<div class="cmeta">'+label+'</div>'
       + (r.desc?'<div class="cmeta">'+r.desc+'</div>':'')+'</div>'
@@ -3571,8 +3680,8 @@ function calcScDuration(){
   function mins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
   var d = mins(en) - mins(st);
   if(d <= 0){ box.innerHTML = '<span style="color:var(--red);font-weight:600;">End time must be after start time.</span>'; return; }
-  var scRate = getRate('T1017');
-  var units = calcUnits(d, scRate ? scRate.unitMin : 15);
+  var scPr = priceSession('T1017', d);
+  var units = scPr.error ? 0 : scPr.units;
   var txt = '<b>'+d+' minutes</b> · T1017 units: <b>'+units+'</b>';
   if(units === 0) txt += '<br><span style="color:#b45309;">Under 5 minutes is not billable.</span>';
   box.innerHTML = txt;
