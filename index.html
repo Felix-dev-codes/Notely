@@ -3952,6 +3952,11 @@ function seedRates(){
   // "other than OT, PT, ST" column.
   known.push({code:'96130', basis:'flat', rate:215.28, mod:'', units:1,
               desc:'Supplemental psychological evaluation (NYC)'});
+  // T1024 is defined per encounter by an integrated specialty team, which is
+  // what a core eval is, and is the code other state EI programs use for a
+  // comprehensive multidisciplinary evaluation.
+  known.push({code:'T1024', basis:'flat', rate:517.52, mod:'', units:1,
+              desc:'Core eval — integrated team, per encounter (NYC)'});
 
   // OT and PT share the OT/PT/ST rate column with speech, but unlike 92507
   // their treatment codes are all "each 15 minutes", so they report units the
