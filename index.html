@@ -1299,6 +1299,25 @@
       <div class="slabel">Staff List</div>
       <div id="uEmpty" class="ibox">No staff added yet.</div>
       <div id="uList"></div>
+
+      <!-- DATA & BACKUP -->
+      <div class="div" style="margin-top:26px;"></div>
+      <div class="slabel">Records &amp; Backup</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Early Intervention records must be kept for six years and be readable without special software. Everything here lives in this browser only — clearing site data or switching device destroys it. Export regularly and keep the file somewhere safe.</div>
+
+      <div id="backupStatus" class="ibox" style="margin-bottom:12px;"></div>
+
+      <button class="btn-p" onclick="exportBackup()">Export Backup File</button>
+      <div style="font-size:.7rem;color:var(--muted);margin:6px 0 14px;line-height:1.4;">Complete copy of every record, for restoring onto another device.</div>
+
+      <button class="btn-p" onclick="exportReadableRecords()">Export Readable Records</button>
+      <div style="font-size:.7rem;color:var(--muted);margin:6px 0 14px;line-height:1.4;">A page anyone can open in a browser — for an auditor, or the six-year retention file.</div>
+
+      <div class="sec-header" style="margin:18px 0 10px;">Restore</div>
+      <div style="font-size:.74rem;color:var(--muted);margin-bottom:8px;line-height:1.5;">Replaces everything currently in this browser with the contents of a backup file.</div>
+      <input type="file" id="restoreFile" accept="application/json,.json" style="width:100%;font-size:.8rem;"/>
+      <div class="val-error" id="restoreError"></div>
+      <button class="btn-s" onclick="restoreBackup()" style="margin-top:10px;">Restore From File</button>
     </div>
   </div>
 
@@ -1879,7 +1898,7 @@ function showPage(page, el){
     }
   }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
-  if(page === 'users'){ renderUsers(); }
+  if(page === 'users'){ renderUsers(); renderBackupStatus(); }
   if(page === 'alerts'){ renderAlerts(); }
   if(page === 'scripts'){
     renderDoctors(); renderRxSelects(); renderScripts(); loadEIOForm();
@@ -3801,6 +3820,21 @@ function buildAlerts(){
     });
   });
 
+  // — Records exist only in this browser —
+  var lastB = localStorage.getItem('ei_last_backup');
+  var haveRecords = JSON.parse(localStorage.getItem('ei_c4')||'[]').length
+                  + JSON.parse(localStorage.getItem('ei_notes_v4')||'[]').length;
+  if(haveRecords && isAdmin()){
+    if(!lastB){
+      out.push({sev:'crit', cat:'Backup', who:'',
+        msg:'Records have never been backed up. They exist only in this browser, and clearing site data would destroy them permanently.', act:'users'});
+    } else {
+      var bd = Math.floor((Date.now() - new Date(lastB).getTime())/86400000);
+      if(bd >= 7) out.push({sev:'warn', cat:'Backup', who:'',
+        msg:'Last backup was '+bd+' days ago. Early Intervention records must be kept for six years.', act:'users'});
+    }
+  }
+
   // — Claims the payer turned down —
   claimsLoad().forEach(function(cl){
     if(cl.status !== 'rejected') return;
@@ -4649,6 +4683,158 @@ function checkScriptCoverage(childName, discipline, dateStr, category){
   var doc = findDoctor(sc.doctorId);
   return {ok:true, blocked:false, script:sc, referringNpi:doc?doc.npi:'',
     reason:'Covered by '+doctorName(doc)+' ('+sc.startDate+' → '+sc.endDate+').'};
+}
+
+// ── RECORDS & BACKUP ──────────────────────────────────────────
+// EIP requires records kept six years and readable without special software.
+// Everything lives in this browser, so clearing site data destroys it: these
+// exports are what makes the retention requirement survivable at all.
+var BACKUP_KEYS = ['ei_c4','ei_p4','ei_notes_v4','ei_sc_v4','ei_users_v4','ei_doctors_v4',
+                   'ei_scripts_v4','ei_rates_v4','ei_claims_v4','ei_eio_v4','ei_bilingual_v4',
+                   'ei_progress_v4','ei_slog_v4','ei_att_v4','ei_modformat_v4'];
+
+function downloadFile(name, text, mime){
+  var blob = new Blob([text], {type:mime||'text/plain'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportBackup(){
+  var data = {exportedAt:new Date().toISOString(), app:'Notely', schema:'v4', records:{}};
+  BACKUP_KEYS.forEach(function(k){
+    var v = localStorage.getItem(k);
+    if(v !== null) data.records[k] = v;
+  });
+  var stamp = todayStr().replace(/-/g,'');
+  downloadFile('notely-backup-'+stamp+'.json', JSON.stringify(data, null, 2), 'application/json');
+  localStorage.setItem('ei_last_backup', new Date().toISOString());
+  renderBackupStatus();
+}
+
+function esc(t){
+  return String(t == null ? '' : t)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// A self-contained page, because the guidance requires records readable
+// without special programming, software or language.
+function exportReadableRecords(){
+  var kids = JSON.parse(localStorage.getItem('ei_c4')||'[]');
+  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var scn = JSON.parse(localStorage.getItem('ei_sc_v4')||'[]');
+  var claims = JSON.parse(localStorage.getItem('ei_claims_v4')||'[]');
+  var p = JSON.parse(localStorage.getItem('ei_p4')||'{}');
+
+  var h = '<!doctype html><html><head><meta charset="utf-8"><title>Notely Records '+esc(todayStr())+'</title><style>'
+    + 'body{font-family:Arial,sans-serif;font-size:13px;margin:28px;color:#111;}'
+    + 'h1{font-size:19px;border-bottom:2px solid #000;padding-bottom:6px;}'
+    + 'h2{font-size:15px;margin:26px 0 8px;background:#eee;padding:6px 8px;}'
+    + 'h3{font-size:13px;margin:18px 0 4px;}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:10px;}'
+    + 'td,th{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top;}'
+    + 'th{background:#f3f3f3;}'
+    + 'pre{white-space:pre-wrap;font-family:inherit;background:#fafafa;border:1px solid #ddd;padding:6px;margin:4px 0;}'
+    + '.meta{color:#555;font-size:11px;}'
+    + '</style></head><body>';
+  h += '<h1>Early Intervention Records</h1>';
+  h += '<p class="meta">Exported '+esc(new Date().toLocaleString())+''
+     + (p.name ? ' &middot; Provider: '+esc(p.name)+(p.npi?' (NPI '+esc(p.npi)+')':'') : '')
+     + '</p>';
+
+  kids.forEach(function(c){
+    h += '<h2>'+esc(c.name)+'</h2><table>'
+      + '<tr><th>Date of birth</th><td>'+esc(c.dob)+'</td><th>EI #</th><td>'+esc(c.ei)+'</td></tr>'
+      + '<tr><th>Service</th><td>'+esc(c.servType)+'</td><th>ICD-10</th><td>'+esc(c.icd)+'</td></tr>'
+      + '<tr><th>IFSP start</th><td>'+esc(c.ifspStart)+'</td><th>Authorisation</th><td>'+esc(c.auth)+'</td></tr>'
+      + '</table>';
+
+    var mine = notes.filter(function(n){ return n.childName === c.name; });
+    if(mine.length){
+      h += '<h3>Session Notes ('+mine.length+')</h3>';
+      mine.forEach(function(n){
+        h += '<table><tr><th>Date</th><td>'+esc(n.sessDate)+'</td>'
+           + '<th>Recorded</th><td>'+esc(n.savedAt||'')+'</td></tr></table>';
+        if(n.header) h += '<pre>'+esc(n.header)+'</pre>';
+        if(n.narrative) h += '<pre>'+esc(n.narrative)+'</pre>';
+      });
+    }
+
+    var scMine = scn.filter(function(x){ return x.childName === c.name; });
+    if(scMine.length){
+      h += '<h3>Service Coordination ('+scMine.length+')</h3><table>'
+        + '<tr><th>Date</th><th>Time</th><th>Minutes</th><th>Activity</th><th>Coordinator</th></tr>';
+      scMine.forEach(function(x){
+        h += '<tr><td>'+esc(x.date)+'</td><td>'+esc(x.start)+'&ndash;'+esc(x.end)+'</td>'
+           + '<td>'+esc(x.mins)+'</td><td>'+esc(x.activity)+'</td><td>'+esc(x.scName)+'</td></tr>';
+      });
+      h += '</table>';
+    }
+
+    var clMine = claims.filter(function(x){ return x.childName === c.name; });
+    if(clMine.length){
+      h += '<h3>Claims ('+clMine.length+')</h3><table>'
+        + '<tr><th>Claim</th><th>Service date</th><th>Code</th><th>Units</th><th>Amount</th><th>Status</th></tr>';
+      clMine.forEach(function(x){
+        h += '<tr><td>'+esc(x.claimId)+'</td><td>'+esc(x.serviceDate)+'</td><td>'+esc(x.cpt)+'</td>'
+           + '<td>'+esc(x.units)+'</td><td>$'+esc(Number(x.amount).toFixed(2))+'</td><td>'+esc(x.status)+'</td></tr>';
+      });
+      h += '</table>';
+    }
+  });
+
+  if(!kids.length) h += '<p>No children on file.</p>';
+  h += '</body></html>';
+  downloadFile('notely-records-'+todayStr().replace(/-/g,'')+'.html', h, 'text/html');
+}
+
+function restoreBackup(){
+  var f = document.getElementById('restoreFile').files[0];
+  if(!f) return showError('restoreError','Choose a backup file first.');
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var data;
+    try { data = JSON.parse(e.target.result); }
+    catch(err){ return showError('restoreError','That file is not readable as a backup.'); }
+    if(!data || !data.records) return showError('restoreError','That file is not a Notely backup.');
+    var count = Object.keys(data.records).length;
+    if(!confirm('Replace everything in this browser with the backup taken '
+      + (data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'at an unknown time')
+      + '?\n\n'+count+' record sets will be restored. Anything currently here is lost.')) return;
+    BACKUP_KEYS.forEach(function(k){ localStorage.removeItem(k); });
+    Object.keys(data.records).forEach(function(k){
+      if(BACKUP_KEYS.indexOf(k) !== -1) localStorage.setItem(k, data.records[k]);
+    });
+    clearError('restoreError');
+    alert('Restored. The app will reload.');
+    location.reload();
+  };
+  reader.readAsText(f);
+}
+
+// Nags when the last backup is old, since the records only exist here.
+function renderBackupStatus(){
+  var el = document.getElementById('backupStatus');
+  if(!el) return;
+  var last = localStorage.getItem('ei_last_backup');
+  var kids = JSON.parse(localStorage.getItem('ei_c4')||'[]').length;
+  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]').length;
+  if(!last){
+    el.style.cssText = 'margin-bottom:12px;background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;font-size:.78rem;color:#b45309;line-height:1.5;';
+    el.innerHTML = kids || notes
+      ? '<b>Never backed up.</b> '+kids+' child record'+(kids===1?'':'s')+' and '+notes+' session note'+(notes===1?'':'s')+' exist only in this browser.'
+      : 'No records yet. Export a backup once you start entering data.';
+    return;
+  }
+  var days = Math.floor((Date.now() - new Date(last).getTime())/86400000);
+  var stale = days >= 7;
+  el.style.cssText = 'margin-bottom:12px;border-radius:8px;padding:10px 12px;font-size:.78rem;line-height:1.5;'
+    + (stale ? 'background:rgba(245,158,11,.1);border:1px solid #f59e0b;color:#b45309;'
+             : 'background:rgba(34,197,94,.08);border:1px solid var(--green);color:#15803d;');
+  el.innerHTML = 'Last backup ' + (days === 0 ? 'today' : days + ' day' + (days===1?'':'s') + ' ago')
+    + ' &middot; ' + kids + ' child record' + (kids===1?'':'s') + ', ' + notes + ' session note' + (notes===1?'':'s')
+    + (stale ? ' &mdash; due another one.' : '.');
 }
 
 // ── STAFF / ROLES ─────────────────────────────────────────────
