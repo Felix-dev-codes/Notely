@@ -498,9 +498,17 @@
             <span style="font-size:.88rem;">Bilingual service</span>
           </label>
         </div>
+        <!-- A core evaluation is two or more qualified personnel from different
+             disciplines, so each participant becomes their own service line
+             carrying their own rendering NPI. -->
+        <div class="field-group field-divider" id="evaluatorsWrap" style="display:none;">
+          <div class="field-label">Evaluators On This Core Evaluation</div>
+          <div id="evaluatorsList"></div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.4;">Each evaluator is billed as a separate service line under one claim, sharing the core evaluation rate.</div>
+        </div>
         <div class="field-group field-divider">
           <div class="field-label">Service Category</div>
-          <select id="servCategory" onchange="refreshScriptStatus()">
+          <select id="servCategory" onchange="refreshScriptStatus(); renderEvaluators();">
             <option value="Direct Therapy">Direct Therapy</option>
             <option value="Core Evaluation">Core Evaluation (MDE)</option>
             <option value="Supplemental Evaluation">Supplemental Evaluation</option>
@@ -2239,6 +2247,37 @@ function saveAssign(idx){
 
 // Shows script coverage for the selected child + date while the note is being
 // written, so a therapist finds out before documenting rather than at billing.
+// Staff who took part in a core evaluation. Stored as name and NPI rather than
+// a staff id, so a claim can still be rebuilt if the staff record changes.
+function renderEvaluators(){
+  var wrap = document.getElementById('evaluatorsWrap');
+  if(!wrap) return;
+  var isCore = g('servCategory') === 'Core Evaluation';
+  wrap.style.display = isCore ? '' : 'none';
+  if(!isCore) return;
+  var staff = usersLoad().filter(function(u){ return u.role !== 'admin'; });
+  var el = document.getElementById('evaluatorsList');
+  if(!staff.length){
+    el.innerHTML = '<div class="ibox" style="font-size:.76rem;">No staff on file. Add evaluators under Staff, or leave this blank to bill the evaluation under the signed-in clinician alone.</div>';
+    return;
+  }
+  el.innerHTML = staff.map(function(u){
+    return '<label style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;">'
+      + '<input type="checkbox" class="evaluator-cb" value="' + u.id + '" style="width:17px;height:17px;accent-color:var(--primary);"/>'
+      + '<span style="font-size:.85rem;">' + userFullName(u) + (u.cred ? ' · ' + u.cred : '') + (u.npi ? '' : ' (no NPI)') + '</span></label>';
+  }).join('');
+}
+
+function collectEvaluators(){
+  var out = [];
+  document.querySelectorAll('#evaluatorsList .evaluator-cb').forEach(function(cb){
+    if(!cb.checked) return;
+    var u = usersLoad().filter(function(x){ return x.id === cb.value; })[0];
+    if(u && u.npi) out.push((u.lastName||'').toUpperCase() + '^' + (u.firstName||'').toUpperCase() + '^' + u.npi);
+  });
+  return out;
+}
+
 function refreshScriptStatus(){
   var box = document.getElementById('scriptStatus');
   if(!box) return;
@@ -2366,6 +2405,7 @@ async function generateNote(){
     sessDelivered ? 'Session Delivered: '+sessDelivered : '',
     g('servCategory') ? 'Service Category: '+g('servCategory') : '',
     (document.getElementById('sessBilingual')||{}).checked ? 'Bilingual: Yes' : '',
+    (g('servCategory')==='Core Evaluation' && collectEvaluators().length) ? 'Evaluators: '+collectEvaluators().join('; ') : '',
     g('visitType') ? 'Visit Type: '+g('visitType') : '',
     g('placeOfService') ? 'Place of Service: '+g('placeOfService') : '',
     g('intensity') ? 'Setting: '+g('intensity') : '',
@@ -3226,16 +3266,42 @@ function generate837P(){
     }
     // Loop 2310B — rendering provider is the clinician who delivered the service
     seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
+    // A core evaluation carried out by several clinicians is one claim with a
+    // service line each, every line naming its own rendering provider in Loop
+    // 2420A -- the 837P equivalent of box 24J on a CMS-1500. The lines split
+    // the evaluation rate so they still sum to CLM02.
+    var evalList = (hdrField(n.header,'Evaluators')||'').split(';')
+      .map(function(x){ return x.trim(); }).filter(Boolean)
+      .map(function(x){ var q = x.split('^'); return {last:q[0]||'', first:q[1]||'', npi:q[2]||''}; })
+      .filter(function(x){ return x.npi; });
+
+    if(evalList.length > 1){
+      var share = (parseFloat(amount) / evalList.length);
+      var running = 0;
+      evalList.forEach(function(ev, ei){
+        // Last line absorbs the rounding so the lines total the claim exactly.
+        var lineAmt = (ei === evalList.length-1)
+          ? (parseFloat(amount) - running)
+          : Math.round(share*100)/100;
+        running += lineAmt;
+        seg.push('LX*'+(ei+1));
+        seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+lineAmt.toFixed(2)+'*UN*'+units+'***1');
+        seg.push('DTP*472*D8*'+sessDateFmt);
+        seg.push('NM1*82*1*'+ev.last+'*'+ev.first+'****XX*'+ev.npi);
+        seg.push('REF*6R*'+claimId+'L'+(ei+1));
+      });
+    } else {
     seg.push('LX*1');
     seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+amount+'*UN*'+units+'***1');
     seg.push('DTP*472*D8*'+sessDateFmt);
     seg.push('REF*6R*'+claimId+'L1');
+    }
     // Bilingual pays on top, so it rides as its own line under the same claim.
     if(hdrField(n.header,'Bilingual') === 'Yes' && bil.code){
-      seg.push('LX*2');
+      seg.push('LX*'+(evalList.length > 1 ? evalList.length+1 : 2));
       seg.push('SV1*HC:'+bil.code+'*'+Number(bil.amount).toFixed(2)+'*UN*1***1');
       seg.push('DTP*472*D8*'+sessDateFmt);
-      seg.push('REF*6R*'+claimId+'L2');
+      seg.push('REF*6R*'+claimId+'L'+(evalList.length > 1 ? evalList.length+1 : 2));
     }
     claimLines.push({claimId:claimId, kind:'therapy', serviceDate:n.sessDate,
                      cpt:cptCode, units:units, amount:parseFloat(amount), noteIds:[n.id]});
