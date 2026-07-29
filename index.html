@@ -1652,6 +1652,15 @@
       <div id="billError" style="display:none;background:rgba(220,38,38,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:10px;font-size:.82rem;color:#dc2626;"></div>
     </div>
 
+    <!-- RESPONSE FILE -->
+    <div class="div" style="margin-top:26px;"></div>
+    <div class="slabel">Read a 999 Response</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">EI-Hub returns a 999 straight after an upload, saying whether the file was accepted. Paste it here or choose the file, and it will be read out in plain terms.</div>
+    <input type="file" id="ack999File" accept=".txt,.999,.edi,text/plain" onchange="load999File()" style="width:100%;font-size:.8rem;margin-bottom:8px;"/>
+    <textarea id="ack999Text" rows="4" placeholder="…or paste the contents of the 999 here" style="font-family:var(--mono);font-size:.72rem;"></textarea>
+    <button class="btn-p" onclick="parse999()" style="margin-top:10px;">Read Response</button>
+    <div id="ack999Out" style="margin-top:12px;"></div>
+
     <!-- SUMMARY -->
     <div class="div" style="margin-top:26px;"></div>
     <div class="slabel">Summary</div>
@@ -3976,6 +3985,95 @@ function updateAlertBadge(crit){
   if(!b) return;
   if(crit > 0){ b.textContent = crit; b.style.display = 'inline-block'; }
   else b.style.display = 'none';
+}
+
+// ── 999 ACKNOWLEDGMENT ────────────────────────────────────────
+// The 999 comes back immediately after an upload and says whether the file
+// parsed as valid X12. It reports faults by position -- segment id, its number
+// in the transaction, the loop, an error code -- so this turns that into
+// something readable rather than leaving raw EDI to be decoded by hand.
+var AK9_STATUS = {A:'Accepted', E:'Accepted with errors', R:'Rejected', P:'Partially accepted', M:'Rejected, message authentication failed', W:'Rejected, assurance failed', X:'Rejected, content decryption failed'};
+var IK5_STATUS = {A:'Accepted', E:'Accepted with errors', R:'Rejected', M:'Rejected, message authentication failed', W:'Rejected, assurance failed', X:'Rejected, content decryption failed'};
+var IK3_ERR = {
+  1:'Segment not recognised', 2:'Segment not expected here', 3:'Segment appears too many times',
+  4:'Segment is missing', 5:'Segment appeared out of order', 6:'A required segment is missing',
+  7:'Segment repeated too many times', 8:'Segment has a data element error'
+};
+var IK4_ERR = {
+  1:'A required element is missing', 2:'A conditional element is missing', 3:'Element is not expected here',
+  4:'Element is too short', 5:'Element is too long', 6:'Element has invalid characters',
+  7:'Element value is not in the allowed list', 8:'Element is otherwise invalid',
+  9:'Element has an invalid date', 10:'Element has an invalid time', 12:'Element repeated too many times'
+};
+
+function load999File(){
+  var f = document.getElementById('ack999File').files[0];
+  if(!f) return;
+  var r = new FileReader();
+  r.onload = function(e){ document.getElementById('ack999Text').value = e.target.result; parse999(); };
+  r.readAsText(f);
+}
+
+function parse999(){
+  var raw = document.getElementById('ack999Text').value.trim();
+  var out = document.getElementById('ack999Out');
+  if(!raw){ out.innerHTML = '<div class="ibox">Paste a 999, or choose the file.</div>'; return; }
+
+  var segs = raw.split('~').map(function(x){ return x.trim().replace(/[\r\n]+/g,''); }).filter(Boolean);
+  var looksRight = segs.some(function(x){ return x.indexOf('AK9') === 0 || x.indexOf('AK1') === 0; });
+  if(!looksRight){
+    out.innerHTML = '<div style="background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;font-size:.8rem;color:#b45309;">'
+      + 'That does not look like a 999 — no AK1 or AK9 segment found. A 277 or an 837 would not read here.</div>';
+    return;
+  }
+
+  var overall = null, counts = null, faults = [], currentSeg = null;
+  segs.forEach(function(sg){
+    var f = sg.split('*');
+    if(f[0] === 'AK9'){ overall = f[1]; counts = {sent:f[2], received:f[3], accepted:f[4]}; }
+    if(f[0] === 'IK5' && f[1] && f[1] !== 'A'){ faults.push({kind:'set', status:f[1], codes:f.slice(2).filter(Boolean)}); }
+    if(f[0] === 'IK3'){
+      currentSeg = {kind:'segment', seg:f[1], pos:f[2], loop:f[3], code:f[4], elements:[]};
+      faults.push(currentSeg);
+    }
+    if(f[0] === 'IK4' && currentSeg){
+      currentSeg.elements.push({pos:(f[1]||'').split(':')[0], ref:f[2], code:f[3], value:f[4]});
+    }
+  });
+
+  var accepted = overall === 'A' || overall === 'E';
+  var head = '<div style="background:'+(accepted?'rgba(34,197,94,.1)':'rgba(239,68,68,.08)')
+    + ';border:1px solid '+(accepted?'var(--green)':'var(--red)')+';border-radius:8px;padding:12px;margin-bottom:10px;">'
+    + '<div style="font-weight:700;font-size:.95rem;color:'+(accepted?'#15803d':'#c53030')+';">'
+    + (AK9_STATUS[overall] || ('Unrecognised status '+overall)) + '</div>'
+    + (counts ? '<div style="font-size:.76rem;color:var(--muted);margin-top:3px;">'
+        + counts.accepted+' of '+counts.received+' transaction set'+(counts.received==='1'?'':'s')+' accepted</div>' : '')
+    + (accepted ? '<div style="font-size:.76rem;color:var(--muted);margin-top:4px;">The file passed format checks. Claim-level results come on the 277, overnight.</div>' : '')
+    + '</div>';
+
+  var body = '';
+  if(faults.length){
+    body += '<div class="slabel">What failed</div>';
+    faults.forEach(function(ft){
+      if(ft.kind === 'set'){
+        body += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:.8rem;">'
+          + '<b>Transaction set: '+(IK5_STATUS[ft.status]||ft.status)+'</b></div>';
+        return;
+      }
+      body += '<div style="border:1px solid var(--red);background:rgba(239,68,68,.05);border-radius:8px;padding:10px;margin-bottom:8px;font-size:.8rem;">'
+        + '<div><b>Segment '+ft.seg+'</b>'+(ft.loop?' in loop '+ft.loop:'')+(ft.pos?', position '+ft.pos:'')+'</div>'
+        + '<div style="color:#c53030;margin-top:3px;">'+(IK3_ERR[parseInt(ft.code)]||('Error code '+ft.code))+'</div>'
+        + ft.elements.map(function(el){
+            return '<div style="margin-top:5px;padding-left:10px;border-left:2px solid var(--border);">'
+              + 'Element '+el.pos+(el.ref?' (data element '+el.ref+')':'')+': '
+              + (IK4_ERR[parseInt(el.code)]||('error '+el.code))
+              + (el.value?' — value sent: <code>'+el.value+'</code>':'')+'</div>';
+          }).join('')
+        + '</div>';
+    });
+    body += '<div class="ibox" style="font-size:.76rem;">Fix these in the app, generate the file again and re-upload. Nothing was billed, so no correction or void is needed — a rejected file never reached adjudication.</div>';
+  }
+  out.innerHTML = head + body;
 }
 
 // ── SUMMARY ───────────────────────────────────────────────────
