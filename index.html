@@ -493,6 +493,12 @@
           </select>
         </div>
         <div class="field-group field-divider">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer;">
+            <input type="checkbox" id="sessBilingual" style="width:18px;height:18px;accent-color:var(--primary);"/>
+            <span style="font-size:.88rem;">Bilingual service</span>
+          </label>
+        </div>
+        <div class="field-group field-divider">
           <div class="field-label">Service Category</div>
           <select id="servCategory" onchange="refreshScriptStatus()">
             <option value="Direct Therapy">Direct Therapy</option>
@@ -1668,6 +1674,23 @@
       <button class="btn-s" id="rateCancelBtn" onclick="cancelRateEdit()" style="margin-top:8px;display:none;">Cancel Edit</button>
       <div class="sbadge" id="rateBadge">Saved</div>
     </div>
+    <div class="sec-header" style="margin:18px 0 12px;">Bilingual Add-On</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Paid on top of the base service. New York pays this by rate code rather than a modifier, so enter the code your billing manual specifies — nothing is assumed.</div>
+    <div class="g2">
+      <div class="field-group">
+        <div class="field-label">Bilingual Code</div>
+        <input type="text" id="bilCode" placeholder="from your billing manual"/>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Add-On Amount ($)</div>
+        <input type="text" id="bilAmt" placeholder="e.g. 54.09"/>
+      </div>
+    </div>
+    <div class="val-error" id="bilError"></div>
+    <button class="btn-p" onclick="saveBilingual()"><span>Save Bilingual Add-On</span></button>
+    <div class="sbadge" id="bilBadge">Saved</div>
+
+    <div class="div" style="margin-top:20px;"></div>
     <div id="rateEmpty" class="ibox" style="margin-top:12px;">No rates configured yet.</div>
     <div id="rateList" style="margin-top:12px;"></div>
     </div>
@@ -1812,6 +1835,7 @@ function showPage(page, el){
     document.getElementById('rateSection').style.display = showRates ? '' : 'none';
     if(showRates){
       renderRates();
+      loadBilingualForm();
       document.getElementById('rateFormWrap').style.display = '';
       s('modFormatSel', modFormat());
       renderModFormatPreview();
@@ -2341,6 +2365,7 @@ async function generateNote(){
     servLoc ? 'IFSP Service Location: '+servLoc : '',
     sessDelivered ? 'Session Delivered: '+sessDelivered : '',
     g('servCategory') ? 'Service Category: '+g('servCategory') : '',
+    (document.getElementById('sessBilingual')||{}).checked ? 'Bilingual: Yes' : '',
     g('visitType') ? 'Visit Type: '+g('visitType') : '',
     g('placeOfService') ? 'Place of Service: '+g('placeOfService') : '',
     g('intensity') ? 'Setting: '+g('intensity') : '',
@@ -3075,6 +3100,16 @@ function generate837P(){
   var scByDate = scBillableByDate(c.name, dateFrom, dateTo);
   var scDates = Object.keys(scByDate);
   var eio = eioLoad() || {};
+  var bil = bilingualLoad();
+  var bilNotes = childNotes.filter(function(n){ return hdrField(n.header,'Bilingual') === 'Yes'; });
+  if(bilNotes.length && !bil.code){
+    errEl.style.display='block';
+    errEl.innerText = bilNotes.length+' session'+(bilNotes.length===1?' is':'s are')+' marked bilingual, '
+      + 'but no bilingual code is configured.\n\nAdd it under Bilingual Add-On on this tab, '
+      + 'or clear the bilingual flag on those notes.';
+    return;
+  }
+
   var evalNeedsEio = childNotes.some(function(n){
     return (hdrField(n.header,'Service Category')||'Direct Therapy') !== 'Direct Therapy';
   });
@@ -3170,7 +3205,9 @@ function generate837P(){
     var sessDateFmt = n.sessDate.replace(/-/g,'');
     var claimId = invoiceNum+'C'+(ni+1);
 
-    seg.push('CLM*'+claimId+'*'+amount+'***'+pos+':B:1*Y*C*N*Y*P');
+    var isBil = hdrField(n.header,'Bilingual') === 'Yes' && bil.code;
+    var claimTot = (parseFloat(amount) + (isBil ? Number(bil.amount) : 0)).toFixed(2);
+    seg.push('CLM*'+claimId+'*'+claimTot+'***'+pos+':B:1*Y*C*N*Y*P');
     seg.push('REF*G1*'+authNum);
     seg.push('REF*EA*'+childEI);
     seg.push('NTE*ADD*'+visitType+'-'+toHHMM(startRaw)+'-'+toHHMM(endRaw));
@@ -3193,6 +3230,13 @@ function generate837P(){
     seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+amount+'*UN*'+units+'***1');
     seg.push('DTP*472*D8*'+sessDateFmt);
     seg.push('REF*6R*'+claimId+'L1');
+    // Bilingual pays on top, so it rides as its own line under the same claim.
+    if(hdrField(n.header,'Bilingual') === 'Yes' && bil.code){
+      seg.push('LX*2');
+      seg.push('SV1*HC:'+bil.code+'*'+Number(bil.amount).toFixed(2)+'*UN*1***1');
+      seg.push('DTP*472*D8*'+sessDateFmt);
+      seg.push('REF*6R*'+claimId+'L2');
+    }
     claimLines.push({claimId:claimId, kind:'therapy', serviceDate:n.sessDate,
                      cpt:cptCode, units:units, amount:parseFloat(amount), noteIds:[n.id]});
   });
@@ -3587,6 +3631,22 @@ var CLAIM_STATUS = {
   paid:     {label:'Paid',      bg:'var(--primary-glow)', bd:'var(--primary)',fg:'var(--primary)'},
   void:     {label:'Voided',    bg:'rgba(245,158,11,.1)', bd:'#f59e0b',       fg:'#b45309'}
 };
+// Bilingual is paid on top of the base service. The amount is known from the
+// rate sheet; the code is not, and New York pays it by rate code rather than a
+// modifier, so it stays configurable and a flagged session refuses to bill
+// until it is set.
+function bilingualLoad(){ return JSON.parse(localStorage.getItem('ei_bilingual_v4')||'null') || {code:'', amount:54.09}; }
+function saveBilingual(){
+  var amt = parseFloat(g('bilAmt'));
+  if(isNaN(amt) || amt <= 0) return showError('bilError','Enter an amount greater than zero.');
+  localStorage.setItem('ei_bilingual_v4', JSON.stringify({code:g('bilCode').toUpperCase().replace(/[^A-Z0-9]/g,''), amount:amt}));
+  clearError('bilError'); showBadge('bilBadge');
+}
+function loadBilingualForm(){
+  var b = bilingualLoad();
+  s('bilCode', b.code); s('bilAmt', b.amount);
+}
+
 function claimsLoad(){ return JSON.parse(localStorage.getItem('ei_claims_v4')||'[]'); }
 function claimsSave(a){ localStorage.setItem('ei_claims_v4', JSON.stringify(a)); }
 
