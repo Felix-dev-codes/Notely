@@ -2265,6 +2265,12 @@ function renderChildList(){
       + '<div><div class="cname">'+c.name+'</div>'
       + '<div class="cmeta">'+(c.servType||'No service')+(c.approach?' · '+c.approach:'')+(c.authCode?' · Auth: '+c.authCode:'')+' · ICD: '+(c.icd||'—')+'</div>'
       + (who ? '<div class="cmeta">Assigned: '+who+'</div>' : '')
+      + (function(){
+          var m = [];
+          if(!c.ei) m.push('EI #'); if(!c.servType) m.push('service type');
+          if(!c.icd) m.push('ICD-10'); if(!c.cpt) m.push('CPT');
+          return m.length ? '<div style="font-size:.68rem;color:#b45309;margin-top:3px;">Missing: '+m.join(', ')+'</div>' : '';
+        })()
       + '</div>'
       + '<div class="cacts">'
       + (isAdmin() ? '<button class="btn-s" onclick="openAssign('+i+')">Assign</button>' : '')
@@ -3888,6 +3894,26 @@ function buildAlerts(){
         }
       }
     }
+  });
+
+  // — Child records that will fail at billing —
+  // Only the name is enforced when a child is saved, so these fields can sit
+  // empty for weeks and only surface when a claim is refused.
+  visibleChildIdx().map(function(i){ return children[i]; }).forEach(function(c){
+    var missing = [];
+    if(!c.ei) missing.push('EI number');
+    if(!c.servType) missing.push('service type');
+    if(!c.icd) missing.push('ICD-10 code');
+    if(!c.cpt) missing.push('CPT code');
+    if(!missing.length) return;
+    // No service type means the script rule cannot run at all, which is worse
+    // than a missing field: nothing is checking that child.
+    var blocking = !c.ei || !c.servType || !c.cpt;
+    out.push({sev: blocking ? 'crit' : 'warn', cat:'Child Record', who:c.name,
+      msg:'Missing ' + missing.join(', ') + '. '
+        + (!c.servType ? 'Without a service type nothing checks this child for a physician order. ' : '')
+        + (blocking ? 'Sessions cannot be billed until this is filled in.' : 'A claim would fall back to a default.'),
+      act:'children'});
   });
 
   // — Progress reports at the mandatory reviews —
