@@ -1363,6 +1363,11 @@
           <div class="field-label">Referring NPI</div>
           <input type="text" id="eioNPI" placeholder="10-digit NPI"/>
         </div>
+          <div class="field-group">
+          <div class="field-label">Service Facility Name <span style="color:var(--muted);font-weight:400;">(for sessions outside the child's home)</span></div>
+          <input type="text" id="facilityName" placeholder="e.g. Bloom Therapy Center"/>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:4px;line-height:1.4;">Required on a claim whenever the place of service is not the home. Sessions at home do not need it.</div>
+        </div>
         <div class="val-error" id="eioError"></div>
         <button class="btn-p" onclick="saveEIO()"><span>Save Referring Source</span></button>
         <div class="sbadge" id="eioBadge">Saved</div>
@@ -3150,6 +3155,20 @@ function generate837P(){
     return;
   }
 
+  // Loop 2310C is required whenever the place of service is not the home, so a
+  // session elsewhere cannot bill until the facility is named.
+  var offSite = childNotes.filter(function(n){
+    var pv = hdrField(n.header,'Place of Service').split(' ')[0];
+    return pv && pv !== '12';
+  });
+  if(offSite.length && !(eioLoad()||{}).facility){
+    errEl.style.display='block';
+    errEl.innerText = offSite.length+' session'+(offSite.length===1?' was':'s were')
+      + ' delivered outside the home, which requires a service facility name on the claim.'
+      + '\n\nAdd it under Scripts, alongside the County / EIO referring source.';
+    return;
+  }
+
   var evalNeedsEio = childNotes.some(function(n){
     return (hdrField(n.header,'Service Category')||'Direct Therapy') !== 'Direct Therapy';
   });
@@ -3266,6 +3285,8 @@ function generate837P(){
     }
     // Loop 2310B — rendering provider is the clinician who delivered the service
     seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
+    // Loop 2310C — required unless the service was rendered in the child's home
+    if(pos !== '12' && eio.facility) seg.push('NM1*77*2*'+eio.facility.toUpperCase());
     // A core evaluation carried out by several clinicians is one claim with a
     // service line each, every line naming its own rendering provider in Loop
     // 2420A -- the 837P equivalent of box 24J on a CMS-1500. The lines split
@@ -4258,12 +4279,12 @@ function saveEIO(){
   var npi = g('eioNPI').replace(/[^0-9]/g,'');
   if(!g('eioLast')) return showError('eioError','Referring last name is required.');
   if(npi.length !== 10) return showError('eioError','NPI must be exactly 10 digits.');
-  localStorage.setItem('ei_eio_v4', JSON.stringify({firstName:g('eioFirst'), lastName:g('eioLast'), npi:npi}));
+  localStorage.setItem('ei_eio_v4', JSON.stringify({firstName:g('eioFirst'), lastName:g('eioLast'), npi:npi, facility:g('facilityName')}));
   clearError('eioError'); showBadge('eioBadge');
 }
 function loadEIOForm(){
   var e = eioLoad(); if(!e) return;
-  s('eioFirst',e.firstName); s('eioLast',e.lastName); s('eioNPI',e.npi);
+  s('eioFirst',e.firstName); s('eioLast',e.lastName); s('eioNPI',e.npi); s('facilityName',e.facility||'');
 }
 
 function doctorsLoad(){ return JSON.parse(localStorage.getItem('ei_doctors_v4')||'[]'); }
