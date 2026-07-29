@@ -1017,6 +1017,11 @@
         <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">CPT Code</div><input type="text" id="nCCPT" placeholder="e.g. 97155"/></div>
       </div>
       <div class="g2 mb12">
+        <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">IFSP Start Date</div><input type="date" id="nCIfspStart"/>
+          <div style="font-size:.66rem;color:var(--muted);margin-top:3px;line-height:1.4;">Sets when the six-month and annual progress reports fall due.</div></div>
+        <div></div>
+      </div>
+      <div class="g2 mb12">
         <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">2nd CPT</div><input type="text" id="nCCPT2" placeholder="optional"/></div>
         <div><div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">3rd CPT</div><input type="text" id="nCCPT3" placeholder="optional"/></div>
       </div>
@@ -2107,7 +2112,7 @@ function removeGoal(i){ tempGoals.splice(i,1); renderTempGoals(); }
 function saveChild(){
   var name = g('nCName'); if(!name) return alert("Please enter child's name.");
   var child = {
-    name:name, dob:g('nCDOB'), sex:g('nCSex'), ei:g('nCEI'), auth:g('nCAuth'), street:g('nCStreet'), city:g('nCCity'), state:g('nCState')||'NY', zip:g('nCZip'),
+    name:name, dob:g('nCDOB'), sex:g('nCSex'), ei:g('nCEI'), auth:g('nCAuth'), ifspStart:g('nCIfspStart'), street:g('nCStreet'), city:g('nCCity'), state:g('nCState')||'NY', zip:g('nCZip'),
     auths:[
       {num:g('nCAuth1'),serv:g('nCAuth1Serv'),hours:g('nCAuth1Hours'),start:g('nCAuth1Start'),end:g('nCAuth1End')},
       {num:g('nCAuth2'),serv:g('nCAuth2Serv'),hours:g('nCAuth2Hours'),start:g('nCAuth2Start'),end:g('nCAuth2End')},
@@ -2131,7 +2136,7 @@ function clearChildForm(){
 }
 function editChild(i){
   var c = children[i]; editIdx = i;
-  s('nCName',c.name); s('nCDOB',c.dob); s('nCSex',c.sex); s('nCEI',c.ei); s('nCAuth',c.auth); s('nCStreet',c.street||''); s('nCCity',c.city||''); s('nCState',c.state||'NY'); s('nCZip',c.zip||'');
+  s('nCName',c.name); s('nCDOB',c.dob); s('nCSex',c.sex); s('nCEI',c.ei); s('nCAuth',c.auth); s('nCIfspStart',c.ifspStart||''); s('nCStreet',c.street||''); s('nCCity',c.city||''); s('nCState',c.state||'NY'); s('nCZip',c.zip||'');
   var auths = c.auths||[{},{},{}];
   for(var ai=0;ai<3;ai++){
     var a=auths[ai]||{};
@@ -2191,6 +2196,7 @@ function renderChildList(){
       + '</div>'
       + '<div class="cacts">'
       + (isAdmin() ? '<button class="btn-s" onclick="openAssign('+i+')">Assign</button>' : '')
+      + '<button class="btn-s" onclick="openProgress('+i+')">Reports</button>'
       + '<button class="btn-s" onclick="editChild('+i+')">Edit</button>'
       + '<button class="btn-s" style="color:var(--primary);border-color:var(--primary);" onclick="showAuthSummary('+i+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:5px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Auth Hours</button>'
       + '<button class="btn-d" onclick="deleteChild('+i+')">x</button></div>'
@@ -3516,6 +3522,82 @@ function copyBlk(id, btn){
   });
 }
 
+// ── PROGRESS REPORTS ──────────────────────────────────────────
+// EIP requires a progress report at the six-month and annual IFSP reviews,
+// both mandatory, submitted to the service coordinator no less than two weeks
+// beforehand. Periodic reports every 90 days are recommended rather than
+// required, so only the two mandatory ones raise alerts.
+var PROGRESS_LEAD_DAYS = 14;
+function progressLoad(){ return JSON.parse(localStorage.getItem('ei_progress_v4')||'[]'); }
+function progressSave(a){ localStorage.setItem('ei_progress_v4', JSON.stringify(a)); }
+
+function addMonths(dateStr, n){
+  var d = new Date(dateStr+'T00:00:00');
+  d.setMonth(d.getMonth()+n);
+  return d.toISOString().slice(0,10);
+}
+
+// The two mandatory reviews for the current IFSP year, and whether each has
+// been filed.
+function progressDue(c){
+  if(!c.ifspStart) return [];
+  var filed = progressLoad().filter(function(r){ return r.childName === c.name; });
+  return [
+    {type:'Six-month review', due:addMonths(c.ifspStart, 6)},
+    {type:'Annual review',    due:addMonths(c.ifspStart, 12)}
+  ].map(function(m){
+    m.filed = filed.some(function(r){ return r.type === m.type; });
+    m.deadline = addMonths(m.due, 0);
+    return m;
+  });
+}
+
+function logProgressReport(childName, type){
+  var arr = progressLoad();
+  arr.unshift({id:uid('pr'), childName:childName, type:type, date:todayStr()});
+  progressSave(arr);
+  renderChildList();
+  try{ updateAlertBadge(buildAlerts().filter(function(a){return a.sev==='crit';}).length); }catch(e){}
+}
+
+function openProgress(idx){
+  var c = children[idx];
+  if(!c.ifspStart) return alert('Set an IFSP start date on '+c.name+' first — it is what the six-month and annual reports are measured from.');
+  var due = progressDue(c);
+  var filed = progressLoad().filter(function(r){ return r.childName === c.name; });
+  var panel = document.createElement('div');
+  panel.id = 'progressPanel';
+  panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9997;display:flex;align-items:center;justify-content:center;padding:20px;';
+  panel.innerHTML = '<div style="background:#fff;border-radius:14px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2);">'
+    + '<div class="slabel" style="margin-bottom:4px;">Progress Reports — ' + c.name + '</div>'
+    + '<div style="font-size:.76rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">IFSP started ' + c.ifspStart + '. Reports are due to the service coordinator two weeks before each review.</div>'
+    + due.map(function(m){
+        var d = daysUntil(m.due);
+        var state = m.filed ? 'Filed' : (d < 0 ? 'Overdue' : 'Due ' + m.due);
+        var col = m.filed ? 'var(--green)' : (d < 0 ? 'var(--red)' : (d <= PROGRESS_LEAD_DAYS ? '#f59e0b' : 'var(--border)'));
+        return '<div style="border:1px solid '+col+';border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+          + '<div><div style="font-weight:600;font-size:.86rem;">'+m.type+'</div>'
+          + '<div class="cmeta">Review '+m.due+' · '+state+'</div></div>'
+          + (m.filed ? '' : '<button class="btn-s" data-type="' + m.type + '" onclick="markProgressFiled(' + idx + ', this)">Mark Filed</button>')
+          + '</div></div>';
+      }).join('')
+    + (filed.length ? '<div class="slabel" style="margin-top:14px;">Filed</div>'
+        + filed.map(function(r){ return '<div class="cmeta">'+r.type+' — '+r.date+'</div>'; }).join('') : '')
+    + '<button class="btn-s" style="margin-top:16px;width:100%;" onclick="closeProgress()">Close</button>'
+    + '</div>';
+  document.body.appendChild(panel);
+}
+function closeProgress(){ var p=document.getElementById('progressPanel'); if(p) p.remove(); }
+
+// Reads the review type off the button rather than embedding a child's name in
+// an onclick, where an apostrophe would break the markup.
+function markProgressFiled(idx, btn){
+  logProgressReport(children[idx].name, btn.getAttribute('data-type'));
+  closeProgress();
+  openProgress(idx);
+}
+
 // ── COMPLIANCE ALERTS ─────────────────────────────────────────
 // Every check here is a claim that would otherwise be denied after the work
 // was already done. Severity is what it costs: 'crit' blocks billing now,
@@ -3632,6 +3714,22 @@ function buildAlerts(){
         }
       }
     }
+  });
+
+  // — Progress reports at the mandatory reviews —
+  visibleChildIdx().map(function(i){ return children[i]; }).forEach(function(c){
+    progressDue(c).forEach(function(m){
+      if(m.filed) return;
+      var d = daysUntil(m.due);
+      if(d === null) return;
+      if(d < 0){
+        out.push({sev:'crit', cat:'Progress Report', who:c.name,
+          msg:m.type+' report was due '+m.due+' and has not been filed.', act:'children'});
+      } else if(d <= PROGRESS_LEAD_DAYS){
+        out.push({sev:'warn', cat:'Progress Report', who:c.name,
+          msg:m.type+' is on '+m.due+' — the report is due to the service coordinator now.', act:'children'});
+      }
+    });
   });
 
   // — Claims the payer turned down —
