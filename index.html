@@ -2542,6 +2542,26 @@ function submitNote(){
     var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
     for(var i=0;i<notes.length;i++){
       if(notes[i].id === window._editingNoteId){
+        // Records can be altered here, so the guidance requires the alteration
+        // itself be documented: what changed, from what, by whom and when.
+        var changes = [];
+        [['narrative', narrative, 'Narrative'],
+         ['goals', document.getElementById('oGoals').value, 'IFSP goals'],
+         ['coaching', document.getElementById('oCoaching').value, 'Caregiver coaching'],
+         ['sec5', document.getElementById('oSec5').value, 'Agreed strategies']
+        ].forEach(function(f){
+          var before = notes[i][f[0]] || '';
+          if(before !== (f[1]||'')) changes.push({field:f[2], before:before, after:f[1]||''});
+        });
+        if(changes.length){
+          notes[i].revisions = notes[i].revisions || [];
+          notes[i].revisions.push({
+            at: new Date().toISOString(),
+            byId: activeUser ? activeUser.id : '',
+            byName: activeUser ? userFullName(activeUser) : (profile.name||''),
+            changes: changes
+          });
+        }
         notes[i].narrative = narrative;
         notes[i].goals = document.getElementById('oGoals').value;
         notes[i].coaching = document.getElementById('oCoaching').value;
@@ -2592,9 +2612,16 @@ function saveNoteToHistory(childName, sessDate, servType, attendStatus, narrativ
   var isMakeup = document.querySelector('[data-val="Make-Up Session"]') && document.querySelector('[data-val="Make-Up Session"]').classList.contains('on');
   var makeupFor = isMakeup ? g('makeupFor') : '';
   var cancelReason = g('cancelReason');
+  // The guidance asks that the actual caregiver be identifiable in the record,
+  // so the note carries who created it and when, in a sortable form.
+  var author = activeUser ? userFullName(activeUser) : (profile.name || '');
   var note = { id:Date.now(), childName:childName, sessDate:sessDate, servType:servType,
     attendStatus:attendStatus, narrative:narrative, goals:goals, coaching:coaching,
     sec5:sec5, header:header, savedAt:new Date().toLocaleString(),
+    createdAt:new Date().toISOString(),
+    authorId: activeUser ? activeUser.id : '', authorName: author,
+    authorNpi: (activeUser && activeUser.npi) || profile.npi || '',
+    revisions: [],
     status: isCancelled ? 'cancelled' : 'draft',
     isMakeup: isMakeup, makeupFor:makeupFor, cancelReason:cancelReason };
   notes.unshift(note);
@@ -2602,6 +2629,28 @@ function saveNoteToHistory(childName, sessDate, servType, attendStatus, narrativ
   saveAttendanceRecord(childName, sessDate, servType, attendStatus);
   renderHistory();
   renderAttendance();
+}
+
+// Renders the documented alteration history on a note. Shown in full rather
+// than summarised, because the point is that a change is visible and
+// attributable rather than silent.
+function revisionHistoryHtml(n){
+  if(!n.revisions || !n.revisions.length) return '';
+  var h = '<div style="margin-top:10px;border:1px solid #f59e0b;background:rgba(245,158,11,.08);border-radius:8px;padding:8px 10px;">'
+    + '<div style="font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;color:#b45309;margin-bottom:6px;">'
+    + 'Amended ' + n.revisions.length + ' time' + (n.revisions.length===1?'':'s') + '</div>';
+  n.revisions.forEach(function(r){
+    h += '<div style="margin-bottom:8px;">'
+      + '<div style="font-size:.7rem;color:#b45309;">' + new Date(r.at).toLocaleString()
+      + (r.byName ? ' · ' + r.byName : '') + '</div>';
+    r.changes.forEach(function(c){
+      h += '<div style="font-size:.72rem;color:var(--text);margin-top:3px;"><b>' + c.field + '</b></div>'
+        + '<div style="font-size:.7rem;color:var(--muted);text-decoration:line-through;white-space:pre-wrap;">' + (c.before || '(empty)') + '</div>'
+        + '<div style="font-size:.7rem;color:var(--text);white-space:pre-wrap;">' + (c.after || '(empty)') + '</div>';
+    });
+    h += '</div>';
+  });
+  return h + '</div>';
 }
 
 function renderHistory(){
@@ -2623,7 +2672,9 @@ function renderHistory(){
         + buildBlock('IFSP Goals Addressed', n.goals)
         + buildBlock('Caregiver Coaching', n.coaching)
         + buildBlock('Caregiver Agreed Strategies', n.sec5)
-        + '<div style="font-size:.68rem;color:var(--muted);font-family:var(--mono);">Saved: '+n.savedAt+'</div>'
+        + '<div style="font-size:.68rem;color:var(--muted);font-family:var(--mono);">Saved: '+n.savedAt
+          + (n.authorName ? ' · Recorded by '+n.authorName+(n.authorNpi?' (NPI '+n.authorNpi+')':'') : '')+'</div>'
+        + revisionHistoryHtml(n)
         + '<button class="btn-d" style="margin-top:8px;width:100%;" onclick="deleteNote('+n.id+',event)">Delete Note</button>'
       + '</div>'
     + '</div>';
@@ -4755,7 +4806,19 @@ function exportReadableRecords(){
       h += '<h3>Session Notes ('+mine.length+')</h3>';
       mine.forEach(function(n){
         h += '<table><tr><th>Date</th><td>'+esc(n.sessDate)+'</td>'
-           + '<th>Recorded</th><td>'+esc(n.savedAt||'')+'</td></tr></table>';
+           + '<th>Recorded</th><td>'+esc(n.savedAt||'')+'</td></tr>'
+           + '<tr><th>Recorded by</th><td colspan="3">'+esc(n.authorName||'')
+           + (n.authorNpi ? ' (NPI '+esc(n.authorNpi)+')' : '')+'</td></tr></table>';
+        if(n.revisions && n.revisions.length){
+          h += '<p class="meta"><b>Amended '+n.revisions.length+' time'+(n.revisions.length===1?'':'s')+'</b></p>';
+          n.revisions.forEach(function(r){
+            h += '<p class="meta">'+esc(new Date(r.at).toLocaleString())+(r.byName?' &middot; '+esc(r.byName):'')+'</p>';
+            r.changes.forEach(function(cg){
+              h += '<p class="meta">'+esc(cg.field)+' &mdash; was:</p><pre>'+esc(cg.before||'(empty)')+'</pre>'
+                 + '<p class="meta">changed to:</p><pre>'+esc(cg.after||'(empty)')+'</pre>';
+            });
+          });
+        }
         if(n.header) h += '<pre>'+esc(n.header)+'</pre>';
         if(n.narrative) h += '<pre>'+esc(n.narrative)+'</pre>';
       });
