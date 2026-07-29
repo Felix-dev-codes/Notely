@@ -1758,12 +1758,19 @@
     </div>
     <div class="sec-header" style="margin:18px 0 12px;">Bilingual Add-On</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Paid on top of the base service. New York pays this by rate code rather than a modifier, so enter the code your billing manual specifies — nothing is assumed.</div>
+    <div class="field-group">
+      <div class="field-label">How Your Program Bills It</div>
+      <select id="bilMode" onchange="onBilModeChange()">
+        <option value="line">Separate service line, using its own code</option>
+        <option value="modifier">Modifier appended to the base service code</option>
+      </select>
+    </div>
     <div class="g2">
       <div class="field-group">
-        <div class="field-label">Bilingual Code</div>
+        <div class="field-label"><span id="bilCodeLabel">Bilingual Code</span></div>
         <input type="text" id="bilCode" placeholder="from your billing manual"/>
       </div>
-      <div class="field-group">
+      <div class="field-group" id="bilAmtWrap">
         <div class="field-label">Add-On Amount ($)</div>
         <input type="text" id="bilAmt" placeholder="e.g. 54.09"/>
       </div>
@@ -3390,7 +3397,8 @@ function generate837P(){
     var claimId = invoiceNum+'C'+(ni+1);
 
     var isBil = hdrField(n.header,'Bilingual') === 'Yes' && bil.code;
-    var claimTot = (parseFloat(amount) + (isBil ? Number(bil.amount) : 0)).toFixed(2);
+    var bilLine = isBil && bil.mode === 'line';
+    var claimTot = (parseFloat(amount) + (bilLine ? Number(bil.amount) : 0)).toFixed(2);
     seg.push('CLM*'+claimId+'*'+claimTot+'***'+pos+':B:1*Y*C*N*Y*P');
     seg.push('REF*G1*'+authNum);
     seg.push('REF*EA*'+childEI);
@@ -3460,7 +3468,7 @@ function generate837P(){
         var cUnits = um > 0 ? share : 1;
         // The discipline modifier follows the child's service, not the rate
         // lookup, so a split line still carries it.
-        var cMod = modifierSuffix(c.servType, '');
+        var cMod = modifierSuffix(c.servType, '', isBil && bil.mode==='modifier');
         seg.push('LX*'+(ci+1));
         seg.push('SV1*HC:'+cc.code+cMod+'*'+lineAmt.toFixed(2)+'*UN*'+cUnits+'***1');
         seg.push('DTP*472*D8*'+sessDateFmt);
@@ -3477,7 +3485,7 @@ function generate837P(){
           : Math.round(share*100)/100;
         running += lineAmt;
         seg.push('LX*'+(ei+1));
-        seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+lineAmt.toFixed(2)+'*UN*'+units+'***1');
+        seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod, isBil && bil.mode==='modifier')+'*'+lineAmt.toFixed(2)+'*UN*'+units+'***1');
         seg.push('DTP*472*D8*'+sessDateFmt);
         seg.push('NM1*82*1*'+ev.last+'*'+ev.first+'****XX*'+ev.npi);
         seg.push('REF*6R*'+claimId+'L'+(ei+1));
@@ -3485,12 +3493,12 @@ function generate837P(){
       lineCount = evalList.length;
     } else {
     seg.push('LX*1');
-    seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+amount+'*UN*'+units+'***1');
+    seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod, isBil && bil.mode==='modifier')+'*'+amount+'*UN*'+units+'***1');
     seg.push('DTP*472*D8*'+sessDateFmt);
     seg.push('REF*6R*'+claimId+'L1');
     }
     // Bilingual pays on top, so it rides as its own line under the same claim.
-    if(hdrField(n.header,'Bilingual') === 'Yes' && bil.code){
+    if(bilLine){
       seg.push('LX*'+(lineCount+1));
       seg.push('SV1*HC:'+bil.code+'*'+Number(bil.amount).toFixed(2)+'*UN*1***1');
       seg.push('DTP*472*D8*'+sessDateFmt);
@@ -4198,16 +4206,34 @@ var CLAIM_STATUS = {
 // rate sheet; the code is not, and New York pays it by rate code rather than a
 // modifier, so it stays configurable and a flagged session refuses to bill
 // until it is set.
-function bilingualLoad(){ return JSON.parse(localStorage.getItem('ei_bilingual_v4')||'null') || {code:'', amount:54.09}; }
+function bilingualLoad(){
+  var b = JSON.parse(localStorage.getItem('ei_bilingual_v4')||'null') || {};
+  return {mode:b.mode||'line', code:b.code||'', amount:(b.amount===undefined?54.09:b.amount)};
+}
 function saveBilingual(){
+  var mode = g('bilMode')||'line';
   var amt = parseFloat(g('bilAmt'));
-  if(isNaN(amt) || amt <= 0) return showError('bilError','Enter an amount greater than zero.');
-  localStorage.setItem('ei_bilingual_v4', JSON.stringify({code:g('bilCode').toUpperCase().replace(/[^A-Z0-9]/g,''), amount:amt}));
+  // A modifier rides on the base line, so it carries no amount of its own.
+  if(mode === 'line' && (isNaN(amt) || amt <= 0))
+    return showError('bilError','Enter an amount greater than zero.');
+  if(!g('bilCode'))
+    return showError('bilError', mode === 'line' ? 'Enter the code your billing manual specifies.' : 'Enter the modifier your billing manual specifies.');
+  localStorage.setItem('ei_bilingual_v4', JSON.stringify({
+    mode:mode,
+    code:g('bilCode').toUpperCase().replace(/[^A-Z0-9]/g,''),
+    amount:(mode==='line' ? amt : 0)
+  }));
   clearError('bilError'); showBadge('bilBadge');
 }
 function loadBilingualForm(){
   var b = bilingualLoad();
-  s('bilCode', b.code); s('bilAmt', b.amount);
+  s('bilMode', b.mode); s('bilCode', b.code); s('bilAmt', b.amount);
+  onBilModeChange();
+}
+function onBilModeChange(){
+  var isLine = g('bilMode') === 'line';
+  document.getElementById('bilCodeLabel').textContent = isLine ? 'Bilingual Code' : 'Bilingual Modifier';
+  document.getElementById('bilAmtWrap').style.display = isLine ? '' : 'none';
 }
 
 function claimsLoad(){ return JSON.parse(localStorage.getItem('ei_claims_v4')||'[]'); }
@@ -4561,7 +4587,7 @@ function disciplineModifier(servType){
 // decision baked into the code.
 function modFormat(){ return localStorage.getItem('ei_modformat_v4') || 'discipline'; }
 
-function modifierSuffix(servType, rateMod){
+function modifierSuffix(servType, rateMod, bilingual){
   var fmt = modFormat();
   var mods = [];
   // Service coordination is not a therapy plan of care and is not habilitative
@@ -4570,8 +4596,14 @@ function modifierSuffix(servType, rateMod){
   var d = disciplineModifier(servType);
   if(fmt !== 'hab' && d) mods.push(d);
   if(fmt === 'discipline96' || fmt === 'hab') mods.push('96');
-  // Anything set on the rate row itself (95 for telemedicine, say) comes last.
+  // Anything set on the rate row itself (95 for telemedicine, say) comes next.
   if(rateMod) mods.push(rateMod);
+  // Where the programme bills bilingual as a modifier rather than its own
+  // line, it rides on the base service instead.
+  if(bilingual){
+    var b = bilingualLoad();
+    if(b.mode === 'modifier' && b.code) mods.push(b.code);
+  }
   return mods.length ? ':'+mods.join(':') : '';
 }
 
