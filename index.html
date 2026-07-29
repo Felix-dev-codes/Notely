@@ -493,6 +493,15 @@
           </select>
         </div>
         <div class="field-group field-divider">
+          <div class="field-label">Service Category</div>
+          <select id="servCategory" onchange="refreshScriptStatus()">
+            <option value="Direct Therapy">Direct Therapy</option>
+            <option value="Core Evaluation">Core Evaluation (MDE)</option>
+            <option value="Supplemental Evaluation">Supplemental Evaluation</option>
+            <option value="Screening">Screening</option>
+          </select>
+        </div>
+        <div class="field-group field-divider">
           <div class="field-label">Visit Type</div>
           <select id="visitType">
             <option value="CV1">Regular Visit</option>
@@ -1625,6 +1634,7 @@
           <select id="rateBasis" onchange="onRateBasisChange()">
             <option value="unit">Per unit (rate multiplies by units)</option>
             <option value="session">Per session length (fixed price)</option>
+            <option value="flat">Flat rate (any length — evaluations)</option>
           </select>
         </div>
         <div class="field-group" id="rateUnitMinWrap">
@@ -2213,7 +2223,7 @@ function refreshScriptStatus(){
   if(idx === '' || !date){ box.style.display='none'; return; }
   var child = children[parseInt(idx)];
   if(!child){ box.style.display='none'; return; }
-  var res = checkScriptCoverage(child.name, child.servType||'', date);
+  var res = checkScriptCoverage(child.name, child.servType||'', date, g('servCategory'));
   box.style.display='block';
   if(res.ok && res.exempt){
     box.style.cssText='margin-bottom:18px;background:var(--light);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.78rem;color:var(--muted);line-height:1.5;';
@@ -2330,6 +2340,7 @@ async function generateNote(){
     (timeFrom && timeTo) ? 'Time: '+timeFrom+' - '+timeTo : '',
     servLoc ? 'IFSP Service Location: '+servLoc : '',
     sessDelivered ? 'Session Delivered: '+sessDelivered : '',
+    g('servCategory') ? 'Service Category: '+g('servCategory') : '',
     g('visitType') ? 'Visit Type: '+g('visitType') : '',
     g('placeOfService') ? 'Place of Service: '+g('placeOfService') : '',
     g('intensity') ? 'Setting: '+g('intensity') : '',
@@ -3031,8 +3042,10 @@ function generate837P(){
   // held back here rather than denied later.
   var blocked = [];
   var referringFor = {};
+  var evalDates = {};
   childNotes.forEach(function(n){
-    var res = checkScriptCoverage(c.name, c.servType||'', n.sessDate);
+    var noteCat = hdrField(n.header,'Service Category') || 'Direct Therapy';
+    var res = checkScriptCoverage(c.name, c.servType||'', n.sessDate, noteCat);
     if(res.blocked) blocked.push(n.sessDate+' — '+res.reason);
     // A missing procedure code used to fall back to 97155, which bills the
     // session as Special Instruction regardless of what was delivered.
@@ -3045,6 +3058,7 @@ function generate837P(){
     // Remember which physician ordered this session so Loop 2310A can name
     // them as the referring provider rather than the treating therapist.
     referringFor[n.sessDate] = res.script ? findDoctor(res.script.doctorId) : null;
+    if(!res.script && noteCat !== 'Direct Therapy') evalDates[n.sessDate] = true;
   });
   if(blocked.length){
     errEl.style.display='block';
@@ -3061,6 +3075,15 @@ function generate837P(){
   var scByDate = scBillableByDate(c.name, dateFrom, dateTo);
   var scDates = Object.keys(scByDate);
   var eio = eioLoad() || {};
+  var evalNeedsEio = childNotes.some(function(n){
+    return (hdrField(n.header,'Service Category')||'Direct Therapy') !== 'Direct Therapy';
+  });
+  if(evalNeedsEio && !eio.npi){
+    errEl.style.display='block';
+    errEl.innerText = 'This batch contains an evaluation or screening, which has no physician order, '
+      + 'so the claim needs the County / EIO referring provider.\n\nAdd it under the Scripts tab, then generate again.';
+    return;
+  }
   if(scDates.length && !eio.npi){
     errEl.style.display='block';
     errEl.innerText = 'There '+(scDates.length===1?'is 1 service coordination date':'are '+scDates.length+' service coordination dates')
@@ -3156,8 +3179,10 @@ function generate837P(){
     // script, not the treating therapist. Falls back to the rendering provider
     // only for script-exempt services, which still needs a proper county/EIO
     // NPI before those are billed.
-    var refDoc = referringFor[n.sessDate];
-    if(refDoc){
+    var refDoc = evalDates[n.sessDate] ? null : referringFor[n.sessDate];
+    if(!refDoc && evalDates[n.sessDate] && eio.npi){
+      seg.push('NM1*DN*1*'+(eio.lastName||'').toUpperCase()+'*'+(eio.firstName||'').toUpperCase()+'****XX*'+eio.npi);
+    } else if(refDoc){
       seg.push('NM1*DN*1*'+(refDoc.lastName||'').toUpperCase()+'*'+(refDoc.firstName||'').toUpperCase()+'****XX*'+refDoc.npi);
     } else {
       seg.push('NM1*DN*1*'+provLast+'*'+provFirst+'****XX*'+npi);
@@ -3796,6 +3821,12 @@ function seedRates(){
     {code:'92507', basis:'session', rate:116.66, mod:'', sessionMin:60, units:1, desc:'Speech-language therapy — Extended visit (NYC), untimed'}
   ];
 
+  // Evaluations pay a flat NYS rate per evaluation. 96130 is psychological
+  // testing, first hour, so it reports one unit and psychology falls in the
+  // "other than OT, PT, ST" column.
+  known.push({code:'96130', basis:'flat', rate:215.28, mod:'', units:1,
+              desc:'Supplemental psychological evaluation (NYC)'});
+
   // OT and PT share the OT/PT/ST rate column with speech, but unlike 92507
   // their treatment codes are all "each 15 minutes", so they report units the
   // way 97155 does. NYS publishes no approved code list -- the memorandum puts
@@ -3817,7 +3848,8 @@ function seedRates(){
     var exists = arr.filter(function(r){
       if((r.code||'').toUpperCase() !== k.code) return false;
       if(k.basis === 'session') return r.basis === 'session' && parseInt(r.sessionMin) === k.sessionMin;
-      return r.basis !== 'session';
+      if(k.basis === 'flat') return r.basis === 'flat';
+      return r.basis !== 'session' && r.basis !== 'flat';
     }).length;
     if(exists) return;
     arr.push({id:uid('rt'), code:k.code, basis:k.basis, rate:k.rate, mod:k.mod,
@@ -3943,6 +3975,11 @@ function priceSession(code, mins){
   var c = (code||'').toUpperCase().trim();
   if(!c) return {error:'No CPT code on this note.'};
   var rows = arr.filter(function(r){ return (r.code||'').toUpperCase() === c; });
+  // An evaluation pays a fixed amount however long it runs, so it is priced
+  // without reference to duration.
+  var flat = rows.filter(function(r){ return r.basis === 'flat'; })[0];
+  if(flat) return {units:parseInt(flat.units||1), amount:parseFloat(flat.rate),
+                   mod:flat.mod||'', basis:'flat', row:flat};
   var sessionRows = rows.filter(function(r){ return r.basis === 'session'; });
   if(sessionRows.length){
     var hit = sessionRows.filter(function(r){ return parseInt(r.sessionMin) === mins; })[0];
@@ -3982,10 +4019,10 @@ function getRate(code){
 }
 
 function onRateBasisChange(){
-  var sess = g('rateBasis') === 'session';
-  document.getElementById('rateUnitMinWrap').style.display = sess ? 'none' : '';
-  document.getElementById('rateSessionWrap').style.display = sess ? '' : 'none';
-  document.getElementById('rateUnitsWrap').style.display   = sess ? '' : 'none';
+  var b = g('rateBasis');
+  document.getElementById('rateUnitMinWrap').style.display = (b === 'unit') ? '' : 'none';
+  document.getElementById('rateSessionWrap').style.display = (b === 'session') ? '' : 'none';
+  document.getElementById('rateUnitsWrap').style.display   = (b === 'unit') ? 'none' : '';
 }
 
 function saveRate(){
@@ -3997,7 +4034,8 @@ function saveRate(){
   var dupe = arr.filter(function(r){
     if(r.code.toUpperCase()!==code || r.id===editRateId) return false;
     if(basis==='session' && r.basis==='session') return parseInt(r.sessionMin)===sessionMin;
-    return basis!=='session' && r.basis!=='session';
+    if(basis==='flat') return r.basis==='flat';
+    return basis==='unit' && r.basis!=='session' && r.basis!=='flat';
   })[0];
   if(dupe) return showError('rateError', basis==='session'
     ? 'A '+sessionMin+'-minute rate for '+code+' already exists.'
@@ -4010,7 +4048,7 @@ function saveRate(){
              mod:g('rateMod').replace(/[^A-Za-z0-9]/g,''),
              unitMin:parseInt(g('rateUnitMin')||'15'),
              sessionMin:(basis==='session'?sessionMin:null),
-             units:(basis==='session'?Math.max(1,parseInt(g('rateUnits')||'1')):1),
+             units:(basis==='unit'?1:Math.max(1,parseInt(g('rateUnits')||'1'))),
              desc:g('rateDesc')};
   if(editRateId){ for(var i=0;i<arr.length;i++){ if(arr[i].id===editRateId){ arr[i]=rec; break; } } }
   else arr.push(rec);
@@ -4061,7 +4099,9 @@ function renderRates(){
     var label = (r.code==='*' ? 'Default (unlisted codes)' : r.code + (r.mod?' · modifier '+r.mod:' · no modifier'))
       + ' · ' + (r.basis==='session'
           ? r.sessionMin+' min session → '+(r.units||1)+' unit'+((r.units||1)==1?'':'s')
-          : (r.unitMin||15)+' min/unit');
+          : r.basis==='flat'
+            ? 'flat, any length → '+(r.units||1)+' unit'+((r.units||1)==1?'':'s')
+            : (r.unitMin||15)+' min/unit');
     return '<div class="ucard"><div><div class="cname">$'+parseFloat(r.rate).toFixed(2)+' <span style="font-weight:400;font-size:.78rem;color:var(--muted);">per unit</span></div>'
       + '<div class="cmeta">'+label+'</div>'
       + (r.desc?'<div class="cmeta">'+r.desc+'</div>':'')+'</div>'
@@ -4252,8 +4292,12 @@ function renderScripts(){
 }
 
 // The scrub rule. Returns {ok, blocked, reason, script, referringNpi}.
-function checkScriptCoverage(childName, discipline, dateStr){
+function checkScriptCoverage(childName, discipline, dateStr, category){
   if(!childName || !dateStr) return {ok:false, blocked:false, reason:'Select a child and session date.'};
+  // An evaluation is what establishes eligibility, so it necessarily happens
+  // before any physician order exists. Screenings likewise.
+  if(category && category !== 'Direct Therapy')
+    return {ok:true, blocked:false, exempt:true, reason:category+' does not require a physician order.'};
   if(EXEMPT_FROM_SCRIPT.indexOf(discipline) !== -1)
     return {ok:true, blocked:false, exempt:true, reason:discipline+' does not require a physician order.'};
   if(!discipline) return {ok:false, blocked:false, reason:'This child has no service type set, so the script rule cannot be checked.'};
