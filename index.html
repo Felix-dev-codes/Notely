@@ -3590,6 +3590,134 @@ function deleteClaim(id){
   renderClaims();
 }
 
+// Rebuilds one claim as a correction (frequency 7) or a void (frequency 8).
+// Both keep the original claim number and quote the EI-Hub claim ID in REF*F8,
+// which is what tells the payer to replace rather than duplicate. A correction
+// re-derives from current data so whatever was fixed is picked up; a void
+// mirrors what was originally sent.
+function generateAdjustment(ledgerId, freq){
+  var arr = claimsLoad();
+  var row = arr.filter(function(c){ return c.id===ledgerId; })[0];
+  if(!row) return;
+  if(!row.eiHubClaimId){
+    alert('This claim has no EI-Hub claim ID recorded.\n\nA '+(freq==='7'?'corrected':'void')+' claim must quote it in REF*F8, otherwise the payer treats it as a new claim rather than a replacement.\n\nMark the claim again and enter the ID from the 277.');
+    return;
+  }
+  var c = children.filter(function(x){ return x.name===row.childName; })[0];
+  if(!c) return alert('Child "'+row.childName+'" is no longer on file, so the claim cannot be rebuilt.');
+  var p = profile;
+  var miss = [];
+  ['name','npi','taxId','street','city','state','zip','phone'].forEach(function(f){ if(!p[f]) miss.push(f); });
+  if(miss.length) return alert('Billing provider details are incomplete: '+miss.join(', '));
+
+  var isVoid = (freq === '8');
+  var npi = (p.npi||'').replace(/[^0-9]/g,'');
+  var provName = (p.name||'').toUpperCase().split(' ');
+  var provLast = provName[provName.length-1], provFirst = provName[0];
+  var now = new Date();
+  var yymmdd = now.getFullYear().toString().slice(2)+('0'+(now.getMonth()+1)).slice(-2)+('0'+now.getDate()).slice(-2);
+  var yyyymmdd = now.getFullYear()+('0'+(now.getMonth()+1)).slice(-2)+('0'+now.getDate()).slice(-2);
+  var hhmm = ('0'+now.getHours()).slice(-2)+('0'+now.getMinutes()).slice(-2);
+  var icn = String(Math.floor(Math.random()*999999999)).padStart(9,'0');
+  var trn = (isVoid?'VOID':'CORR')+row.claimId;
+
+  // Re-price from current data for a correction; mirror the original for a void.
+  var units = row.units, amount = Number(row.amount), mods = '', cpt = row.cpt;
+  if(!isVoid){
+    var mins = 0;
+    if(row.kind === 'sc'){
+      var sc = scLoad().filter(function(x){ return row.noteIds.indexOf(x.id) !== -1; });
+      mins = sc.reduce(function(a,x){ return a + (x.mins||0); }, 0);
+    } else {
+      var nn = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]')
+                 .filter(function(x){ return row.noteIds.indexOf(x.id) !== -1; })[0];
+      if(nn){ mins = headerMins(nn.header); cpt = hdrField(nn.header,'CPT').split(' ')[0] || row.cpt; }
+    }
+    var pr = priceSession(cpt, mins);
+    if(pr.error) return alert('Cannot re-price this claim: '+pr.error);
+    units = pr.units; amount = pr.amount;
+    mods = (row.kind === 'sc') ? (pr.mod ? ':'+pr.mod : '') : modifierSuffix(c.servType, pr.mod);
+  } else if(row.kind !== 'sc'){
+    mods = modifierSuffix(c.servType, '');
+  }
+
+  var refDoc = null;
+  if(row.kind !== 'sc'){
+    var cov = checkScriptCoverage(c.name, c.servType||'', row.serviceDate);
+    if(cov.script) refDoc = findDoctor(cov.script.doctorId);
+  }
+  var eio = eioLoad() || {};
+  if(!refDoc && !eio.npi) return alert('No referring provider available for this claim. Add the doctor script, or the County / EIO referring source under Scripts.');
+
+  var icd = (row.kind === 'sc')
+    ? ((c.icd||'').replace(/\./g,'').split(' ')[0] || 'F809')
+    : ((c.icd||'F809').replace(/\./g,'').split(' ')[0]);
+  var pos = '12';
+
+  var seg = [];
+  seg.push('ISA*00*          *00*          *ZZ*'+npi.padEnd(15)+'*ZZ*EIHUB          *'+yymmdd+'*'+hhmm+'*^*00501*'+icn+'*1*P*:');
+  seg.push('GS*HC*'+npi+'*EIHUB*'+yyyymmdd+'*'+hhmm+'*1*X*005010X222A1');
+  seg.push('ST*837*0001*005010X222A1');
+  seg.push('BHT*0019*00*'+trn+'*'+yyyymmdd+'*'+hhmm+'*CH');
+  seg.push('NM1*41*1*'+provLast+'*'+provFirst+'****46*'+npi);
+  seg.push('PER*IC*'+provFirst+' '+provLast+'*TE*'+p.phone.replace(/[^0-9]/g,''));
+  seg.push('NM1*40*2*NEW YORK CITY- EARLY INTERVENTION*****46*70');
+  seg.push('HL*1**20*1');
+  seg.push('NM1*85*1*'+provLast+'*'+provFirst+'****XX*'+npi);
+  seg.push('N3*'+p.street.toUpperCase());
+  seg.push('N4*'+p.city.toUpperCase()+'*'+p.state.toUpperCase()+'*'+p.zip.replace(/[^0-9]/g,'').padEnd(9,'0'));
+  seg.push('REF*EI*'+p.taxId.replace(/[^0-9]/g,''));
+  seg.push('HL*2*1*22*0');
+  seg.push('SBR*P*18*******OF');
+  seg.push('NM1*IL*1*'+c.name.split(' ').pop().toUpperCase()+'*'+c.name.split(' ')[0].toUpperCase()+'****MI*'+(c.ei||''));
+  if(c.dob) seg.push('DMG*D8*'+(c.dob||'').replace(/-/g,'')+'*'+(c.sex||'M').toUpperCase().charAt(0));
+  seg.push('NM1*PR*2*NEW YORK CITY- EARLY INTERVENTION*****PI*70');
+  // CLM05-3 carries the frequency: 7 replaces the original, 8 cancels it.
+  seg.push('CLM*'+row.claimId+'*'+Number(amount).toFixed(2)+'***'+pos+':B:'+freq+'*Y*C*N*Y*P');
+  seg.push('REF*G1*'+(c.auth||''));
+  seg.push('REF*EA*'+(c.ei||''));
+  seg.push('REF*F8*'+row.eiHubClaimId);
+  seg.push('HI*ABK:'+icd);
+  if(refDoc) seg.push('NM1*DN*1*'+(refDoc.lastName||'').toUpperCase()+'*'+(refDoc.firstName||'').toUpperCase()+'****XX*'+refDoc.npi);
+  else seg.push('NM1*DN*1*'+(eio.lastName||'').toUpperCase()+'*'+(eio.firstName||'').toUpperCase()+'****XX*'+eio.npi);
+  seg.push('NM1*82*1*'+provLast+'*'+provFirst+'****XX*'+npi);
+  seg.push('LX*1');
+  seg.push('SV1*HC:'+cpt+mods+'*'+Number(amount).toFixed(2)+'*UN*'+units+'***1');
+  seg.push('DTP*472*D8*'+row.serviceDate.replace(/-/g,''));
+  if(row.kind === 'sc'){
+    var scRows = scLoad().filter(function(x){ return row.noteIds.indexOf(x.id) !== -1; });
+    if(scRows.length) seg.push('NTE*ADD*'+toHHMMc(scRows[0].start)+'-'+toHHMMc(scRows[0].end));
+  }
+  seg.push('REF*6R*'+row.claimId+'L1');
+  var stIdx = seg.findIndex(function(x){ return x.indexOf('ST*') === 0; });
+  seg.push('SE*'+((seg.length - stIdx) + 1)+'*0001');
+  seg.push('GE*1*1');
+  seg.push('IEA*1*'+icn);
+
+  var fileName = (isVoid?'837P_VOID_':'837P_CORRECTED_')+c.name.replace(/\s/g,'_')+'_'+row.claimId+'.txt';
+  var blob = new Blob([seg.join('~\n')+'~'], {type:'text/plain'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href=url; a.download=fileName; a.click();
+  URL.revokeObjectURL(url);
+
+  arr.unshift({
+    id: uid('clm'), claimId: row.claimId, invoiceNum: trn,
+    childName: c.name, childEI: c.ei||'', kind: row.kind,
+    serviceDate: row.serviceDate, cpt: cpt, units: units, amount: amount,
+    noteIds: row.noteIds || [], fileName: fileName,
+    submittedAt: new Date().toISOString(), status: 'submitted',
+    eiHubClaimId: '', reason: '',
+    adjustmentOf: row.claimId, freq: freq
+  });
+  row.status = isVoid ? 'void' : 'rejected';
+  claimsSave(arr);
+  renderClaims();
+  alert((isVoid?'Void':'Corrected')+' claim downloaded: '+fileName
+    +'\n\nFrequency '+freq+', replacing EI-Hub claim '+row.eiHubClaimId
+    +'\n\nUpload to EI-Hub the same way as an original claim.');
+}
+
 function renderClaims(){
   var list = document.getElementById('claimsList'), empty = document.getElementById('claimsEmpty');
   if(!list) return;
@@ -3609,6 +3737,12 @@ function renderClaims(){
       + (c.reason ? '<div style="font-size:.78rem;color:#c53030;margin-top:4px;">Reason: '+c.reason+'</div>' : '')
       + '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">'
       + next.map(function(x){ return '<button class="btn-s" style="font-size:.66rem;padding:3px 8px;" onclick="setClaimStatus(\'' + c.id + '\',\'' + x + '\')">Mark '+CLAIM_STATUS[x].label+'</button>'; }).join('')
+      // A replacement only makes sense once the payer has responded and given
+      // back an EI-Hub claim ID to quote.
+      + (c.status !== 'void' && !c.adjustmentOf
+          ? '<button class="btn-s" style="font-size:.66rem;padding:3px 8px;color:var(--primary);border-color:var(--primary);" onclick="generateAdjustment(\'' + c.id + '\',\'7\')">Correct</button>'
+            + '<button class="btn-s" style="font-size:.66rem;padding:3px 8px;color:#b45309;border-color:#f59e0b;" onclick="generateAdjustment(\'' + c.id + '\',\'8\')">Void</button>'
+          : '')
       + '<button class="btn-d" style="font-size:.66rem;padding:3px 8px;" onclick="deleteClaim(\'' + c.id + '\')">x</button>'
       + '</div></div>';
   }).join('');
