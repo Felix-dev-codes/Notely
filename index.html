@@ -1652,6 +1652,23 @@
       <div id="billError" style="display:none;background:rgba(220,38,38,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:10px;font-size:.82rem;color:#dc2626;"></div>
     </div>
 
+    <!-- SUMMARY -->
+    <div class="div" style="margin-top:26px;"></div>
+    <div class="slabel">Summary</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Work delivered across all children in a date range, and how much of it has been billed.</div>
+    <div class="g2 mb12">
+      <div>
+        <div class="field-label">From</div>
+        <input type="date" id="rptFrom" onchange="renderSummary()"/>
+      </div>
+      <div>
+        <div class="field-label">To</div>
+        <input type="date" id="rptTo" onchange="renderSummary()"/>
+      </div>
+    </div>
+    <div id="summaryOut"></div>
+    <button class="btn-s" onclick="exportSummaryCsv()" style="margin-top:10px;">Export Summary (CSV)</button>
+
     <!-- CLAIMS LEDGER -->
     <div class="div" style="margin-top:26px;"></div>
     <div class="slabel">Submitted Claims</div>
@@ -1885,6 +1902,7 @@ function showPage(page, el){
   if(page === 'billing'){
     renderBillingChildSel();
     renderClaims();
+    renderSummary();
     // Reimbursement amounts are agency business, not clinical information, so
     // the whole schedule is hidden from anyone who is not an admin.
     var showRates = isAdmin();
@@ -3958,6 +3976,114 @@ function updateAlertBadge(crit){
   if(!b) return;
   if(crit > 0){ b.textContent = crit; b.style.display = 'inline-block'; }
   else b.style.display = 'none';
+}
+
+// ── SUMMARY ───────────────────────────────────────────────────
+// Work delivered against work billed. Notes are the record of what happened;
+// the ledger is what was claimed for it, so the gap between them is revenue
+// sitting uncollected.
+function summaryData(){
+  var from = g('rptFrom'), to = g('rptTo');
+  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]').filter(function(n){
+    if(n.status === 'cancelled') return false;
+    if(from && n.sessDate < from) return false;
+    if(to && n.sessDate > to) return false;
+    return true;
+  });
+  var sc = scLoad().filter(function(x){
+    if(from && x.date < from) return false;
+    if(to && x.date > to) return false;
+    return true;
+  });
+
+  var byClinician = {}, byChild = {};
+  function bump(map, key, o){
+    var r = map[key] || (map[key] = {sessions:0, units:0, amount:0, billed:0, unbilled:0});
+    r.sessions++; r.units += o.units; r.amount += o.amount;
+    if(o.billed) r.billed += o.amount; else r.unbilled += o.amount;
+  }
+
+  notes.forEach(function(n){
+    var cpt = hdrField(n.header,'CPT').split(' ')[0];
+    var pr = cpt ? priceSession(cpt, headerMins(n.header)) : {error:1};
+    var o = {units: pr.error ? 0 : pr.units, amount: pr.error ? 0 : pr.amount, billed: !!n.billed};
+    bump(byClinician, n.authorName || 'Unattributed', o);
+    bump(byChild, n.childName, o);
+  });
+  sc.forEach(function(x){
+    var pr = priceSession('T1017', x.mins);
+    var o = {units: pr.error ? 0 : pr.units, amount: pr.error ? 0 : pr.amount, billed: !!x.billed};
+    bump(byClinician, x.scName || 'Unattributed', o);
+    bump(byChild, x.childName, o);
+  });
+
+  var tot = {sessions:0, units:0, amount:0, billed:0, unbilled:0};
+  Object.keys(byChild).forEach(function(k){
+    tot.sessions += byChild[k].sessions; tot.units += byChild[k].units;
+    tot.amount += byChild[k].amount; tot.billed += byChild[k].billed; tot.unbilled += byChild[k].unbilled;
+  });
+  return {byClinician:byClinician, byChild:byChild, total:tot};
+}
+
+function summaryTable(title, map){
+  var keys = Object.keys(map).sort(function(a,b){ return map[b].amount - map[a].amount; });
+  if(!keys.length) return '';
+  var h = '<div class="slabel" style="margin-top:16px;">'+title+'</div>'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.78rem;">'
+    + '<tr style="background:var(--light);"><th style="text-align:left;padding:6px;border:1px solid var(--border);">Name</th>'
+    + '<th style="padding:6px;border:1px solid var(--border);">Sessions</th>'
+    + '<th style="padding:6px;border:1px solid var(--border);">Units</th>'
+    + '<th style="padding:6px;border:1px solid var(--border);">Total</th>'
+    + '<th style="padding:6px;border:1px solid var(--border);">Unbilled</th></tr>';
+  keys.forEach(function(k){
+    var r = map[k];
+    h += '<tr><td style="padding:6px;border:1px solid var(--border);">'+k+'</td>'
+      + '<td style="padding:6px;border:1px solid var(--border);text-align:center;">'+r.sessions+'</td>'
+      + '<td style="padding:6px;border:1px solid var(--border);text-align:center;">'+r.units+'</td>'
+      + '<td style="padding:6px;border:1px solid var(--border);text-align:right;">$'+r.amount.toFixed(2)+'</td>'
+      + '<td style="padding:6px;border:1px solid var(--border);text-align:right;'
+      + (r.unbilled > 0 ? 'color:#b45309;font-weight:600;' : 'color:var(--muted);')+'">$'+r.unbilled.toFixed(2)+'</td></tr>';
+  });
+  return h + '</table></div>';
+}
+
+function renderSummary(){
+  var el = document.getElementById('summaryOut');
+  if(!el) return;
+  var d = summaryData();
+  var t = d.total;
+  if(!t.sessions){ el.innerHTML = '<div class="ibox">No sessions in this range.</div>'; return; }
+  el.innerHTML =
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    + '<div style="flex:1;min-width:88px;background:var(--light);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;">'
+      + '<div style="font-size:1.3rem;font-weight:700;">'+t.sessions+'</div><div style="font-size:.65rem;color:var(--muted);">Sessions</div></div>'
+    + '<div style="flex:1;min-width:88px;background:var(--light);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;">'
+      + '<div style="font-size:1.3rem;font-weight:700;">'+t.units+'</div><div style="font-size:.65rem;color:var(--muted);">Units</div></div>'
+    + '<div style="flex:1;min-width:88px;background:var(--primary-glow);border:1px solid var(--primary);border-radius:10px;padding:10px;text-align:center;">'
+      + '<div style="font-size:1.3rem;font-weight:700;color:var(--primary);">$'+t.amount.toFixed(0)+'</div><div style="font-size:.65rem;color:var(--muted);">Delivered</div></div>'
+    + '<div style="flex:1;min-width:88px;background:'+(t.unbilled>0?'rgba(245,158,11,.1)':'var(--light)')+';border:1px solid '+(t.unbilled>0?'#f59e0b':'var(--border)')+';border-radius:10px;padding:10px;text-align:center;">'
+      + '<div style="font-size:1.3rem;font-weight:700;color:'+(t.unbilled>0?'#b45309':'var(--muted)')+';">$'+t.unbilled.toFixed(0)+'</div><div style="font-size:.65rem;color:var(--muted);">Unbilled</div></div>'
+    + '</div>'
+    + summaryTable('By Clinician', d.byClinician)
+    + summaryTable('By Child', d.byChild);
+}
+
+function exportSummaryCsv(){
+  var d = summaryData();
+  var rows = [['Grouping','Name','Sessions','Units','Total','Unbilled']];
+  function add(label, map){
+    Object.keys(map).forEach(function(k){
+      var r = map[k];
+      rows.push([label, k, r.sessions, r.units, r.amount.toFixed(2), r.unbilled.toFixed(2)]);
+    });
+  }
+  add('Clinician', d.byClinician);
+  add('Child', d.byChild);
+  rows.push(['Total','',d.total.sessions,d.total.units,d.total.amount.toFixed(2),d.total.unbilled.toFixed(2)]);
+  var csv = rows.map(function(r){
+    return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
+  }).join('\n');
+  downloadFile('notely-summary-'+todayStr().replace(/-/g,'')+'.csv', csv, 'text/csv');
 }
 
 // ── CLAIMS LEDGER ─────────────────────────────────────────────
