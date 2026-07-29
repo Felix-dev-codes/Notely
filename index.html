@@ -604,18 +604,37 @@
           <div class="field-label">CPT Code</div>
           <input type="text" id="cptCode" placeholder="e.g. 97155"/>
         </div>
-        <div class="field-group field-divider">
-          <div class="field-label">2nd CPT Code (optional)</div>
-          <input type="text" id="cptCode2" placeholder="optional"/>
+        <div class="g2 field-divider" style="padding-bottom:14px;margin-bottom:14px;">
+          <div>
+            <div class="field-label">2nd CPT Code (optional)</div>
+            <input type="text" id="cptCode2" placeholder="optional"/>
+          </div>
+          <div>
+            <div class="field-label">Minutes On This Code</div>
+            <input type="number" id="cptMins2" placeholder="e.g. 20" min="0"/>
+          </div>
         </div>
-        <div class="field-group field-divider">
-          <div class="field-label">3rd CPT Code (optional)</div>
-          <input type="text" id="cptCode3" placeholder="optional"/>
+        <div class="g2 field-divider" style="padding-bottom:14px;margin-bottom:14px;">
+          <div>
+            <div class="field-label">3rd CPT Code (optional)</div>
+            <input type="text" id="cptCode3" placeholder="optional"/>
+          </div>
+          <div>
+            <div class="field-label">Minutes On This Code</div>
+            <input type="number" id="cptMins3" placeholder="e.g. 20" min="0"/>
+          </div>
         </div>
-        <div class="field-group field-divider">
-          <div class="field-label">4th CPT Code (optional)</div>
-          <input type="text" id="cptCode4" placeholder="optional"/>
+        <div class="g2 field-divider" style="padding-bottom:14px;margin-bottom:14px;">
+          <div>
+            <div class="field-label">4th CPT Code (optional)</div>
+            <input type="text" id="cptCode4" placeholder="optional"/>
+          </div>
+          <div>
+            <div class="field-label">Minutes On This Code</div>
+            <input type="number" id="cptMins4" placeholder="e.g. 20" min="0"/>
+          </div>
         </div>
+        <div class="ibox" style="font-size:.74rem;">A session split across codes is billed as one claim with a line per code. Minutes decide each line's units and its share of the visit rate; the first code takes whatever time is left over.</div>
       </div>
     </div>
 
@@ -2424,8 +2443,11 @@ async function generateNote(){
     icd ? 'ICD-10: '+icd : '',
     cpt ? 'CPT: '+cpt : '',
     g('cptCode2') ? 'CPT 2: '+g('cptCode2') : '',
+    (g('cptCode2') && g('cptMins2')) ? 'CPT 2 Minutes: '+g('cptMins2') : '',
     g('cptCode3') ? 'CPT 3: '+g('cptCode3') : '',
+    (g('cptCode3') && g('cptMins3')) ? 'CPT 3 Minutes: '+g('cptMins3') : '',
     g('cptCode4') ? 'CPT 4: '+g('cptCode4') : '',
+    (g('cptCode4') && g('cptMins4')) ? 'CPT 4 Minutes: '+g('cptMins4') : '',
     participants.length ? 'Participants: '+participants.concat(otherPart ? [otherPart] : []).join(', ') : '',
     'License/Certification #: CERTIFIED',
     'Supervising Clinician (if applicable): N/A',
@@ -3297,12 +3319,58 @@ function generate837P(){
     // service line each, every line naming its own rendering provider in Loop
     // 2420A -- the 837P equivalent of box 24J on a CMS-1500. The lines split
     // the evaluation rate so they still sum to CLM02.
+    var lineCount = 1;
     var evalList = (hdrField(n.header,'Evaluators')||'').split(';')
       .map(function(x){ return x.trim(); }).filter(Boolean)
       .map(function(x){ var q = x.split('^'); return {last:q[0]||'', first:q[1]||'', npi:q[2]||''}; })
       .filter(function(x){ return x.npi; });
 
-    if(evalList.length > 1){
+    // A session split across procedure codes is one visit, so it pays one visit
+    // rate. Each code becomes its own line: units from that code's own minutes
+    // and its own rate row, amount its share of the visit rate by minutes. The
+    // guide requires the lines to sum to CLM02.
+    var extraCodes = [];
+    [2,3,4].forEach(function(k){
+      var cc = hdrField(n.header,'CPT '+k).split(' ')[0];
+      var cm = parseInt(hdrField(n.header,'CPT '+k+' Minutes')||'0');
+      if(cc && cm > 0) extraCodes.push({code:cc, mins:cm});
+    });
+
+    if(extraCodes.length && evalList.length <= 1){
+      var extraMins = extraCodes.reduce(function(a,x){ return a+x.mins; }, 0);
+      var firstMins = Math.max(0, mins - extraMins);
+      var allCodes = (firstMins > 0 ? [{code:cptCode, mins:firstMins}] : []).concat(extraCodes);
+      var totalMins = allCodes.reduce(function(a,x){ return a+x.mins; }, 0) || 1;
+      var visitTotal = parseFloat(amount);
+      var spent = 0;
+      // Rounding each code's minutes up independently would invent units the
+      // session's own time cannot support -- 40 and 20 minutes each rounding up
+      // reports five 15-minute units for a one-hour visit. So the session's
+      // total units are worked out once and shared out by minutes.
+      var baseInc = codeUnitMinutes(allCodes[0].code) || 15;
+      var allowed = Math.max(allCodes.length, calcUnits(totalMins, baseInc));
+      var unitsLeft = allowed;
+      allCodes.forEach(function(cc, ci){
+        var last = (ci === allCodes.length-1);
+        var lineAmt = last ? (visitTotal - spent)
+                           : Math.round((visitTotal * cc.mins / totalMins) * 100) / 100;
+        spent += lineAmt;
+        var um = codeUnitMinutes(cc.code);
+        var share = last ? unitsLeft
+                         : Math.max(1, Math.min(unitsLeft - (allCodes.length-1-ci),
+                                    Math.round(allowed * cc.mins / totalMins)));
+        unitsLeft -= share;
+        var cUnits = um > 0 ? share : 1;
+        // The discipline modifier follows the child's service, not the rate
+        // lookup, so a split line still carries it.
+        var cMod = modifierSuffix(c.servType, '');
+        seg.push('LX*'+(ci+1));
+        seg.push('SV1*HC:'+cc.code+cMod+'*'+lineAmt.toFixed(2)+'*UN*'+cUnits+'***1');
+        seg.push('DTP*472*D8*'+sessDateFmt);
+        seg.push('REF*6R*'+claimId+'L'+(ci+1));
+      });
+      lineCount = allCodes.length;
+    } else if(evalList.length > 1){
       var share = (parseFloat(amount) / evalList.length);
       var running = 0;
       evalList.forEach(function(ev, ei){
@@ -3317,6 +3385,7 @@ function generate837P(){
         seg.push('NM1*82*1*'+ev.last+'*'+ev.first+'****XX*'+ev.npi);
         seg.push('REF*6R*'+claimId+'L'+(ei+1));
       });
+      lineCount = evalList.length;
     } else {
     seg.push('LX*1');
     seg.push('SV1*HC:'+cptCode+modifierSuffix(c.servType, pr.mod)+'*'+amount+'*UN*'+units+'***1');
@@ -3325,10 +3394,10 @@ function generate837P(){
     }
     // Bilingual pays on top, so it rides as its own line under the same claim.
     if(hdrField(n.header,'Bilingual') === 'Yes' && bil.code){
-      seg.push('LX*'+(evalList.length > 1 ? evalList.length+1 : 2));
+      seg.push('LX*'+(lineCount+1));
       seg.push('SV1*HC:'+bil.code+'*'+Number(bil.amount).toFixed(2)+'*UN*1***1');
       seg.push('DTP*472*D8*'+sessDateFmt);
-      seg.push('REF*6R*'+claimId+'L'+(evalList.length > 1 ? evalList.length+1 : 2));
+      seg.push('REF*6R*'+claimId+'L'+(lineCount+1));
     }
     claimLines.push({claimId:claimId, kind:'therapy', serviceDate:n.sessDate,
                      cpt:cptCode, units:units, amount:parseFloat(amount), noteIds:[n.id]});
@@ -4217,6 +4286,20 @@ function saveModFormat(){
   showBadge('modFormatBadge');
   renderModFormatPreview();
   if(document.getElementById('billChildSel') && document.getElementById('billChildSel').value !== '') renderBillingSession();
+}
+
+// How many minutes one unit of a code represents, worked out from its own rate
+// rows. A visit-priced row records both the session length and the units it
+// reports, so the increment falls out of the two -- 30 minutes reporting 2
+// units is a 15-minute code, 30 minutes reporting 1 unit is untimed.
+function codeUnitMinutes(code){
+  seedRates();
+  var rows = ratesLoad().filter(function(r){ return (r.code||'').toUpperCase() === (code||'').toUpperCase(); });
+  var unitRow = rows.filter(function(r){ return r.basis === 'unit'; })[0];
+  if(unitRow) return parseInt(unitRow.unitMin||15);
+  var sess = rows.filter(function(r){ return r.basis === 'session' && r.sessionMin && r.units; })[0];
+  if(sess) return Math.round(parseInt(sess.sessionMin) / parseInt(sess.units));
+  return 0; // flat or unknown -- caller falls back to a single unit
 }
 
 function priceSession(code, mins){
