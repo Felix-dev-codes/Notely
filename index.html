@@ -1105,6 +1105,14 @@
         <input type="password" id="pTaxID" placeholder="Enter Tax ID" maxlength="11"/>
       </div>
       <div class="mb12">
+        <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Billing As</div>
+        <select id="pBillerType">
+          <option value="individual">Individual provider</option>
+          <option value="agency">Agency</option>
+        </select>
+        <div style="font-size:.66rem;color:var(--muted);margin-top:4px;line-height:1.4;">Sets the submitter ID on the file. The guide has agencies send their Tax ID and individual providers their NPI.</div>
+      </div>
+      <div class="mb12">
         <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Street Address</div>
         <input type="text" id="pStreet" placeholder="e.g. 1013 Seawane Drive"/>
       </div>
@@ -2141,7 +2149,7 @@ function getChecked(containerId){
 
 // ── PROFILE ───────────────────────────────────────────────────
 function saveProfile(){
-  profile = { name:g('pName'), cred:g('pCred'), npi:g('pNPI'), lic:g('pLic'), taxId:g('pTaxID'),
+  profile = { name:g('pName'), cred:g('pCred'), npi:g('pNPI'), lic:g('pLic'), taxId:g('pTaxID'), billerType:g('pBillerType')||'individual',
     street:g('pStreet'), city:g('pCity'), state:g('pState'), zip:g('pZip'), phone:g('pPhone'),
     agency:g('pAgency'), progId:g('pProgID'), type:g('pType') };
   profileSave(profile);
@@ -2151,7 +2159,7 @@ function loadProfileForm(){
   if(!profile.name) return;
   s('pName',profile.name); s('pCred',profile.cred); s('pNPI',profile.npi);
   s('pLic',profile.lic); s('pAgency',profile.agency); s('pProgID',profile.progId); s('pType',profile.type);
-  s('pTaxID',profile.taxId||'');
+  s('pTaxID',profile.taxId||''); s('pBillerType',profile.billerType||'individual');
   s('pStreet',profile.street||''); s('pCity',profile.city||'');
   s('pState',profile.state||''); s('pZip',profile.zip||''); s('pPhone',profile.phone||'');
 }
@@ -3449,8 +3457,11 @@ function generate837P(){
   // which forfeits the file that confirms the submission was even accepted.
   // ISA15 is P because the guide states EI-Hub only accepts production data --
   // there is no test mode, so every upload is a live claim.
-  seg.push('ISA*00*          *00*          *ZZ*'+npi.padEnd(15)+'*ZZ*EIHUB          *'+yymmdd+'*'+hhmm+'*^*00501*'+icn+'*1*P*:');
-  seg.push('GS*HC*'+npi+'*EIHUB*'+yyyymmdd+'*'+hhmm+'*1*X*005010X222A1');
+  // ISA06 is the submitter id: the guide has agencies send their Tax ID and
+  // individual providers their NPI.
+  var submitterId = (p.billerType === 'agency' && taxId) ? taxId : npi;
+  seg.push('ISA*00*          *00*          *ZZ*'+submitterId.padEnd(15)+'*ZZ*EIHUB          *'+yymmdd+'*'+hhmm+'*^*00501*'+icn+'*1*P*:');
+  seg.push('GS*HC*'+submitterId+'*EIHUB*'+yyyymmdd+'*'+hhmm+'*1*X*005010X222A1');
   seg.push('ST*837*0001*005010X222A1');
   seg.push('BHT*0019*00*'+invoiceNum+'*'+yyyymmdd+'*'+hhmm+'*CH');
   seg.push('NM1*41*1*'+provLast+'*'+provFirst+'****46*'+npi);
@@ -3475,7 +3486,10 @@ function generate837P(){
     var parts = timeStr.split('-');
     var startRaw = parts[0]?parts[0].trim():'';
     var endRaw = parts[1]?parts[1].trim():'';
-    function toHHMM(t){ var m=t.match(/(\d+):(\d+)/); if(!m)return'0800'; return ('0'+m[1]).slice(-2)+('0'+m[2]).slice(-2); }
+    // The guide requires a 24-hour clock, HH 00-23. Reading the hour straight
+    // off an AM/PM string sent every afternoon session out an hour block wrong
+    // -- 1:00 PM went as 0100.
+    function toHHMM(t){ return to24(t) || '0800'; }
     function toMins(t){ var m=t.match(/(\d+):(\d+)/); return m?parseInt(m[1])*60+parseInt(m[2]):0; }
     var mins = parts.length===2 ? toMins(endRaw)-toMins(startRaw) : 60;
     var cptM = n.header.match(/CPT: ([^\n]+)/);
@@ -4407,6 +4421,7 @@ function generateAdjustment(ledgerId, freq){
 
   var isVoid = (freq === '8');
   var npi = (p.npi||'').replace(/[^0-9]/g,'');
+  var taxId = (p.taxId||'').replace(/[^0-9]/g,'');
   var provName = (p.name||'').toUpperCase().split(' ');
   var provLast = provName[provName.length-1], provFirst = provName[0];
   var now = new Date();
@@ -4450,8 +4465,11 @@ function generateAdjustment(ledgerId, freq){
   var pos = '12';
 
   var seg = [];
-  seg.push('ISA*00*          *00*          *ZZ*'+npi.padEnd(15)+'*ZZ*EIHUB          *'+yymmdd+'*'+hhmm+'*^*00501*'+icn+'*1*P*:');
-  seg.push('GS*HC*'+npi+'*EIHUB*'+yyyymmdd+'*'+hhmm+'*1*X*005010X222A1');
+  // ISA06 is the submitter id: the guide has agencies send their Tax ID and
+  // individual providers their NPI.
+  var submitterId = (p.billerType === 'agency' && taxId) ? taxId : npi;
+  seg.push('ISA*00*          *00*          *ZZ*'+submitterId.padEnd(15)+'*ZZ*EIHUB          *'+yymmdd+'*'+hhmm+'*^*00501*'+icn+'*1*P*:');
+  seg.push('GS*HC*'+submitterId+'*EIHUB*'+yyyymmdd+'*'+hhmm+'*1*X*005010X222A1');
   seg.push('ST*837*0001*005010X222A1');
   seg.push('BHT*0019*00*'+trn+'*'+yyyymmdd+'*'+hhmm+'*CH');
   seg.push('NM1*41*1*'+provLast+'*'+provFirst+'****46*'+npi);
@@ -4461,7 +4479,7 @@ function generateAdjustment(ledgerId, freq){
   seg.push('NM1*85*1*'+provLast+'*'+provFirst+'****XX*'+npi);
   seg.push('N3*'+p.street.toUpperCase());
   seg.push('N4*'+p.city.toUpperCase()+'*'+p.state.toUpperCase()+'*'+p.zip.replace(/[^0-9]/g,'').padEnd(9,'0'));
-  seg.push('REF*EI*'+p.taxId.replace(/[^0-9]/g,''));
+  seg.push('REF*EI*'+taxId);
   seg.push('HL*2*1*22*0');
   seg.push('SBR*P*18*******OF');
   seg.push('NM1*IL*1*'+c.name.split(' ').pop().toUpperCase()+'*'+c.name.split(' ')[0].toUpperCase()+'****MI*'+(c.ei||''));
@@ -4651,6 +4669,17 @@ function hdrField(header, name){
   return '';
 }
 
+// "1:00 PM" -> "1300". Returns '' when the text holds no time.
+function to24(t){
+  var m = (t||'').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+  if(!m) return '';
+  var h = parseInt(m[1]);
+  var ap = m[3] ? m[3].toUpperCase() : '';
+  if(ap === 'PM' && h !== 12) h += 12;
+  if(ap === 'AM' && h === 12) h = 0;
+  return ('0'+h).slice(-2) + ('0'+m[2]).slice(-2);
+}
+
 // Session length in minutes from the header's "Time: 9:00 AM - 10:00 AM" line.
 function headerMins(header){
   var parts = hdrField(header,'Time').split('-');
@@ -4683,10 +4712,7 @@ function scBillableByDate(childName, dateFrom, dateTo){
 }
 
 // "09:05" -> "0905", the HHMM form Loop 2400 NTE requires.
-function toHHMMc(t){
-  var m = (t||'').match(/(\d+):(\d+)/);
-  return m ? ('0'+m[1]).slice(-2)+('0'+m[2]).slice(-2) : '0000';
-}
+function toHHMMc(t){ return to24(t) || '0000'; }
 
 // GN/GO/GP identify the plan of care a therapy service falls under, so they
 // follow the child's discipline rather than the procedure code -- 97110 is
