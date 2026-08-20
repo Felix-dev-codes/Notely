@@ -1815,9 +1815,54 @@
 </div><!-- end app -->
 
 <script>
+// ── STORAGE ───────────────────────────────────────────────────
+// One place that reads and writes. Everything else goes through the accessors
+// below rather than touching storage directly, so moving to a server later is
+// a change here instead of a change in a hundred places.
+//
+// Records are scoped to an agency. A single-agency install uses the default
+// scope and behaves exactly as before; the scope only starts mattering when
+// several agencies share a backend.
+var DEFAULT_AGENCY = 'default';
+
+var Store = {
+  agency: function(){ return localStorage.getItem('ei_agency') || DEFAULT_AGENCY; },
+  // The default agency keeps the original key names, so existing installs
+  // carry on reading their own data with nothing to migrate.
+  key: function(name){
+    var a = Store.agency();
+    return a === DEFAULT_AGENCY ? name : a + '::' + name;
+  },
+  read: function(name, fallback){
+    try {
+      var raw = localStorage.getItem(Store.key(name));
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch(e){ return fallback; }
+  },
+  write: function(name, value){
+    localStorage.setItem(Store.key(name), JSON.stringify(value));
+  },
+  readRaw: function(name){ return localStorage.getItem(Store.key(name)); },
+  writeRaw: function(name, value){ localStorage.setItem(Store.key(name), value); },
+  remove: function(name){ localStorage.removeItem(Store.key(name)); }
+};
+
+// Accessors for the core stores. The later ones already had these; these are
+// the four that were still being read and written directly all over.
+function notesLoad(){ return Store.read('ei_notes_v4', []); }
+function notesSave(a){ Store.write('ei_notes_v4', a); }
+function childrenLoad(){ return Store.read('ei_c4', []); }
+function childrenSave(a){ Store.write('ei_c4', a); }
+function slogLoad(){ return Store.read('ei_slog_v4', {}); }
+function slogSave(o){ Store.write('ei_slog_v4', o); }
+function attLoad(){ return Store.read('ei_att_v4', []); }
+function attSave(a){ Store.write('ei_att_v4', a); }
+function profileLoad(){ return Store.read('ei_p4', {}); }
+function profileSave(o){ Store.write('ei_p4', o); }
+
 // ── STATE ─────────────────────────────────────────────────────
-let profile = JSON.parse(localStorage.getItem('ei_p4')||'{}');
-let children = JSON.parse(localStorage.getItem('ei_c4')||'[]');
+let profile = profileLoad();
+let children = childrenLoad();
 
 // ── MIGRATE OLD DATA ──────────────────────────────────────────
 (function migrateLegacyData(){
@@ -1827,7 +1872,7 @@ let children = JSON.parse(localStorage.getItem('ei_c4')||'[]');
     var old = JSON.parse(localStorage.getItem(key)||'[]');
     if(old.length && !children.length){
       children = old;
-      localStorage.setItem('ei_c4', JSON.stringify(children));
+      childrenSave(children);
       console.log('Migrated ' + old.length + ' children from ' + key);
     }
   });
@@ -1837,7 +1882,7 @@ let children = JSON.parse(localStorage.getItem('ei_c4')||'[]');
     var old = JSON.parse(localStorage.getItem(key)||'{}');
     if(old.name && !profile.name){
       profile = old;
-      localStorage.setItem('ei_p4', JSON.stringify(profile));
+      profileSave(profile);
       console.log('Migrated profile from ' + key);
     }
   });
@@ -2040,7 +2085,7 @@ function validateStep(step){
   }
   if(step === 6){
     if(window._step6Confirmed) return true;
-    var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+    var slogData = slogLoad();
     var idx = document.getElementById('childSel').value;
     var child = idx !== '' ? children[parseInt(idx)] : null;
     if(child && slogData[child.name] && Object.keys(slogData[child.name]).length > 0) return true;
@@ -2099,7 +2144,7 @@ function saveProfile(){
   profile = { name:g('pName'), cred:g('pCred'), npi:g('pNPI'), lic:g('pLic'), taxId:g('pTaxID'),
     street:g('pStreet'), city:g('pCity'), state:g('pState'), zip:g('pZip'), phone:g('pPhone'),
     agency:g('pAgency'), progId:g('pProgID'), type:g('pType') };
-  localStorage.setItem('ei_p4', JSON.stringify(profile));
+  profileSave(profile);
   showBadge('pSaveBadge');
 }
 function loadProfileForm(){
@@ -2233,7 +2278,7 @@ function saveChild(){
   };
   if(editIdx !== null){ children[editIdx] = child; editIdx = null; document.getElementById('saveCBtnTxt').textContent='Save Child Profile'; document.getElementById('childFormLbl').textContent='Add New Child'; }
   else children.push(child);
-  localStorage.setItem('ei_c4', JSON.stringify(children));
+  childrenSave(children);
   clearChildForm(); renderChildList(); renderChildSel(); showBadge('cSaveBadge');
   window.scrollTo({top: document.getElementById('childList').offsetTop - 20, behavior:'smooth'});
 }
@@ -2263,7 +2308,7 @@ function editChild(i){
 }
 function deleteChild(i){
   if(!confirm('Delete '+children[i].name+'?')) return;
-  children.splice(i,1); localStorage.setItem('ei_c4',JSON.stringify(children));
+  children.splice(i,1); childrenSave(children);
   renderChildList(); renderChildSel();
 }
 // Children the acting user is responsible for. Assignment is stored on the
@@ -2367,7 +2412,7 @@ function saveAssign(idx){
     if(cb.checked) picked.push(cb.value);
   });
   children[idx].assigned = picked;
-  localStorage.setItem('ei_c4', JSON.stringify(children));
+  childrenSave(children);
   closeAssign();
   renderChildList(); renderChildSel();
 }
@@ -2617,7 +2662,7 @@ function submitNote(){
 
   // If editing an existing draft, update it
   if(window._editingNoteId){
-    var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+    var notes = notesLoad();
     for(var i=0;i<notes.length;i++){
       if(notes[i].id === window._editingNoteId){
         // Records can be altered here, so the guidance requires the alteration
@@ -2648,7 +2693,7 @@ function submitNote(){
         break;
       }
     }
-    localStorage.setItem('ei_notes_v4', JSON.stringify(notes));
+    notesSave(notes);
     window._editingNoteId = null;
     document.getElementById('submitNoteBtn').innerHTML = '<span> Submit & Save Note</span>';
     document.getElementById('submitNoteBtn').style.display = 'none';
@@ -2685,7 +2730,7 @@ function submitNote(){
 
 // ── HISTORY ───────────────────────────────────────────────────
 function saveNoteToHistory(childName, sessDate, servType, attendStatus, narrative, goals, coaching, sec5, header){
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var notes = notesLoad();
   var isCancelled = attendStatus && attendStatus.toLowerCase().indexOf('cancel') > -1;
   var isMakeup = document.querySelector('[data-val="Make-Up Session"]') && document.querySelector('[data-val="Make-Up Session"]').classList.contains('on');
   var makeupFor = isMakeup ? g('makeupFor') : '';
@@ -2703,7 +2748,7 @@ function saveNoteToHistory(childName, sessDate, servType, attendStatus, narrativ
     status: isCancelled ? 'cancelled' : 'draft',
     isMakeup: isMakeup, makeupFor:makeupFor, cancelReason:cancelReason };
   notes.unshift(note);
-  localStorage.setItem('ei_notes_v4', JSON.stringify(notes));
+  notesSave(notes);
   saveAttendanceRecord(childName, sessDate, servType, attendStatus);
   renderHistory();
   renderAttendance();
@@ -2732,7 +2777,7 @@ function revisionHistoryHtml(n){
 }
 
 function renderHistory(){
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var notes = notesLoad();
   var list = document.getElementById('historyList');
   var empty = document.getElementById('historyEmpty');
   if(!list) return;
@@ -2774,20 +2819,20 @@ function toggleNoteDetail(id){ var el=document.getElementById(id); if(el) el.cla
 function deleteNote(id, e){
   e.stopPropagation();
   if(!confirm('Delete this note?')) return;
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var notes = notesLoad();
   notes = notes.filter(function(n){ return n.id !== id; });
-  localStorage.setItem('ei_notes_v4', JSON.stringify(notes));
+  notesSave(notes);
   renderHistory();
 }
 
 // ── ATTENDANCE ────────────────────────────────────────────────
 function saveAttendanceRecord(childName, sessDate, servType, attendStatus){
-  var att = JSON.parse(localStorage.getItem('ei_att_v4')||'[]');
+  var att = attLoad();
   att.unshift({id:Date.now(), childName:childName, sessDate:sessDate, servType:servType, attendStatus:attendStatus||'Attended'});
-  localStorage.setItem('ei_att_v4', JSON.stringify(att));
+  attSave(att);
 }
 function renderAttendance(){
-  var att = JSON.parse(localStorage.getItem('ei_att_v4')||'[]');
+  var att = attLoad();
   var list = document.getElementById('attendanceList');
   var empty = document.getElementById('attendanceEmpty');
   if(!list) return;
@@ -2806,7 +2851,7 @@ function renderAttendance(){
 }
 function clearAttendance(){
   if(!confirm('Clear all attendance records?')) return;
-  localStorage.removeItem('ei_att_v4'); renderAttendance();
+  Store.remove('ei_att_v4'); renderAttendance();
 }
 
 // ── SERVICE LOG ───────────────────────────────────────────────
@@ -2838,9 +2883,9 @@ function renderServiceLog(){
   document.getElementById('slogProvider').textContent = (p.name||'—')+(p.cred?', '+p.cred:'');
   document.getElementById('slogNPI').textContent = (c.servType||p.type||'—')+(p.npi?' · NPI: '+p.npi:'');
   document.getElementById('slogProvider').textContent = p.name ? (p.name+(p.cred?', '+p.cred:'')) : '— (Set in Profile tab)';
-  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes = notesLoad();
   var childNotes = allNotes.filter(function(n){ return n.childName === c.name; }).sort(function(a,b){ return new Date(a.sessDate)-new Date(b.sessDate); });
-  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var slogData = slogLoad();
   var childSlog = slogData[c.name]||{};
   if(!childNotes.length){ stats.style.display='none'; exportBtn.style.display='none'; document.getElementById('slogDateRange').style.display='none'; empty.style.display='block'; rows.innerHTML=''; return; }
   empty.style.display='none'; stats.style.display='flex'; exportBtn.style.display='block'; document.getElementById('slogDateRange').style.display='block';
@@ -2923,7 +2968,7 @@ function renderServiceLog(){
   rows.innerHTML = html;
   // Init all canvases in the service log rows
   setTimeout(function(){
-    var allSlogNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+    var allSlogNotes = notesLoad();
     allSlogNotes.forEach(function(sn){
       var canvas = document.getElementById('slog-canvas-'+sn.id);
       if(canvas && !canvas._init) initCanvas('slog-canvas-'+sn.id);
@@ -2932,7 +2977,7 @@ function renderServiceLog(){
 }
 function signRow(childName, noteId){
   var dateEl = document.getElementById('sig-date-'+noteId);
-  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var slogData = slogLoad();
   if(!slogData[childName]) slogData[childName]={};
   var existing = slogData[childName][noteId]||{};
   var slogRowCanvas = document.getElementById('slog-canvas-'+noteId);
@@ -2946,20 +2991,20 @@ function signRow(childName, noteId){
     providerSigImg:existing.providerSigImg||'',
     slogSigImg:slogRowImg||existing.slogSigImg||''
   };
-  localStorage.setItem('ei_slog_v4', JSON.stringify(slogData));
+  slogSave(slogData);
   // Update note status to service log signed
-  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes = notesLoad();
   for(var i=0;i<allNotes.length;i++){
     if(allNotes[i].id===noteId){ allNotes[i].status='slogsigned'; break; }
   }
-  localStorage.setItem('ei_notes_v4', JSON.stringify(allNotes));
+  notesSave(allNotes);
   renderServiceLog();
 }
 function unsignRow(childName, noteId){
   if(!confirm('Clear this signature?')) return;
-  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var slogData = slogLoad();
   if(slogData[childName]) delete slogData[childName][noteId];
-  localStorage.setItem('ei_slog_v4', JSON.stringify(slogData));
+  slogSave(slogData);
   renderServiceLog();
 }
 function downloadNotesAndServiceLog(){
@@ -2967,7 +3012,7 @@ function downloadNotesAndServiceLog(){
   var c = children[parseInt(idx)], p = profile;
   var dateFrom = document.getElementById('slogDateFrom').value;
   var dateTo = document.getElementById('slogDateTo').value;
-  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes = notesLoad();
   var childNotes = allNotes.filter(function(n){
     if(n.childName !== c.name) return false;
     if(dateFrom && n.sessDate < dateFrom) return false;
@@ -2977,7 +3022,7 @@ function downloadNotesAndServiceLog(){
 
   if(!childNotes.length){ alert('No notes found for the selected date range.'); return; }
 
-  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var slogData = slogLoad();
   var childSlog = slogData[c.name]||{};
 
   // Build session notes HTML
@@ -3143,7 +3188,7 @@ function renderBillingSession(){
   var c = children[parseInt(idx)];
   var dateFrom = document.getElementById('billDateFrom').value;
   var dateTo = document.getElementById('billDateTo').value;
-  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes = notesLoad();
   var childNotes = allNotes.filter(function(n){
     if(n.childName !== c.name) return false;
     if(n.status === 'cancelled') return false;
@@ -3275,7 +3320,7 @@ function generate837P(){
 
   var dateFrom = document.getElementById('billDateFrom').value;
   var dateTo = document.getElementById('billDateTo').value;
-  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes = notesLoad();
   var childNotes = allNotes.filter(function(n){
     if(n.childName !== c.name) return false;
     if(n.status === 'cancelled') return false;
@@ -3614,11 +3659,11 @@ function generate837P(){
   URL.revokeObjectURL(url);
 
   // Mark as billed
-  var allN = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allN = notesLoad();
   childNotes.forEach(function(n){
     for(var i=0;i<allN.length;i++){ if(allN[i].id===n.id){ allN[i].billed=true; allN[i].invoiceNum=invoiceNum; break; } }
   });
-  localStorage.setItem('ei_notes_v4', JSON.stringify(allN));
+  notesSave(allN);
 
   // Record what went out. Without this the app cannot say what it submitted,
   // which makes a rejection impossible to trace back and a corrected claim
@@ -3665,11 +3710,11 @@ function saveServiceLogSig(){
   var child = idx !== '' ? children[parseInt(idx)] : null;
   if(!child) return alert('Please select a child first.');
   var sigDate = g('slogParentSigDate');
-  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes = notesLoad();
   var childNote = null;
   for(var i=0;i<allNotes.length;i++){ if(allNotes[i].childName===child.name && allNotes[i].sessDate===g('sessDate')){ childNote=allNotes[i]; break; } }
   if(!childNote) return alert('Please submit the note in Step 5 first.');
-  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var slogData = slogLoad();
   if(!slogData[child.name]) slogData[child.name]={};
   var slogSigDate = document.getElementById('slogParentSigDate2') ? document.getElementById('slogParentSigDate2').value : new Date().toISOString().split('T')[0];
   // Save canvas images as base64
@@ -3685,13 +3730,13 @@ function saveServiceLogSig(){
     sessNoteSigned:true, sessNoteDate:sigDate||new Date().toISOString().split('T')[0],
     parentSigImg:parentSigImg, providerSigImg:providerSigImg, slogSigImg:slogSigImg
   };
-  localStorage.setItem('ei_slog_v4', JSON.stringify(slogData));
+  slogSave(slogData);
   // Update note status to submitted
-  var allNotes2 = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes2 = notesLoad();
   for(var j=0;j<allNotes2.length;j++){
     if(allNotes2[j].id === childNote.id){ allNotes2[j].status='submitted'; break; }
   }
-  localStorage.setItem('ei_notes_v4', JSON.stringify(allNotes2));
+  notesSave(allNotes2);
   renderAttendance();
   renderServiceLog();
   // Show success and unlock Next button
@@ -3755,8 +3800,8 @@ function copyBlk(id, btn){
 // beforehand. Periodic reports every 90 days are recommended rather than
 // required, so only the two mandatory ones raise alerts.
 var PROGRESS_LEAD_DAYS = 14;
-function progressLoad(){ return JSON.parse(localStorage.getItem('ei_progress_v4')||'[]'); }
-function progressSave(a){ localStorage.setItem('ei_progress_v4', JSON.stringify(a)); }
+function progressLoad(){ return Store.read('ei_progress_v4', []); }
+function progressSave(a){ Store.write('ei_progress_v4', a); }
 
 function addMonths(dateStr, n){
   var d = new Date(dateStr+'T00:00:00');
@@ -3843,7 +3888,7 @@ function noteMins(n){ return headerMins(n.header||''); }
 
 function buildAlerts(){
   var out = [];
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var notes = notesLoad();
   var scripts = scriptsLoad();
   var today = todayStr();
 
@@ -3983,9 +4028,9 @@ function buildAlerts(){
   });
 
   // — Records exist only in this browser —
-  var lastB = localStorage.getItem('ei_last_backup');
-  var haveRecords = JSON.parse(localStorage.getItem('ei_c4')||'[]').length
-                  + JSON.parse(localStorage.getItem('ei_notes_v4')||'[]').length;
+  var lastB = Store.readRaw('ei_last_backup');
+  var haveRecords = childrenLoad().length
+                  + notesLoad().length;
   if(haveRecords && isAdmin()){
     if(!lastB){
       out.push({sev:'crit', cat:'Backup', who:'',
@@ -4166,7 +4211,7 @@ function parse999(){
 // sitting uncollected.
 function summaryData(){
   var from = g('rptFrom'), to = g('rptTo');
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]').filter(function(n){
+  var notes = notesLoad().filter(function(n){
     if(n.status === 'cancelled') return false;
     if(from && n.sessDate < from) return false;
     if(to && n.sessDate > to) return false;
@@ -4283,7 +4328,7 @@ var CLAIM_STATUS = {
 // modifier, so it stays configurable and a flagged session refuses to bill
 // until it is set.
 function bilingualLoad(){
-  var b = JSON.parse(localStorage.getItem('ei_bilingual_v4')||'null') || {};
+  var b = Store.read('ei_bilingual_v4', null) || {};
   return {mode:b.mode||'line', code:b.code||'', amount:(b.amount===undefined?54.09:b.amount)};
 }
 function saveBilingual(){
@@ -4294,7 +4339,7 @@ function saveBilingual(){
     return showError('bilError','Enter an amount greater than zero.');
   if(!g('bilCode'))
     return showError('bilError', mode === 'line' ? 'Enter the code your billing manual specifies.' : 'Enter the modifier your billing manual specifies.');
-  localStorage.setItem('ei_bilingual_v4', JSON.stringify({
+  Store.write('ei_bilingual_v4', ({
     mode:mode,
     code:g('bilCode').toUpperCase().replace(/[^A-Z0-9]/g,''),
     amount:(mode==='line' ? amt : 0)
@@ -4312,8 +4357,8 @@ function onBilModeChange(){
   document.getElementById('bilAmtWrap').style.display = isLine ? '' : 'none';
 }
 
-function claimsLoad(){ return JSON.parse(localStorage.getItem('ei_claims_v4')||'[]'); }
-function claimsSave(a){ localStorage.setItem('ei_claims_v4', JSON.stringify(a)); }
+function claimsLoad(){ return Store.read('ei_claims_v4', []); }
+function claimsSave(a){ Store.write('ei_claims_v4', a); }
 
 function setClaimStatus(id, status){
   var arr = claimsLoad();
@@ -4379,7 +4424,7 @@ function generateAdjustment(ledgerId, freq){
       var sc = scLoad().filter(function(x){ return row.noteIds.indexOf(x.id) !== -1; });
       mins = sc.reduce(function(a,x){ return a + (x.mins||0); }, 0);
     } else {
-      var nn = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]')
+      var nn = notesLoad()
                  .filter(function(x){ return row.noteIds.indexOf(x.id) !== -1; })[0];
       if(nn){ mins = headerMins(nn.header); cpt = hdrField(nn.header,'CPT').split(' ')[0] || row.cpt; }
     }
@@ -4504,8 +4549,8 @@ function renderClaims(){
 // guide shows T1017 carrying no modifier, so both live with the code.
 // The '*' row is an explicit, visible default for codes not listed.
 var editRateId = null;
-function ratesLoad(){ return JSON.parse(localStorage.getItem('ei_rates_v4')||'[]'); }
-function ratesSave(a){ localStorage.setItem('ei_rates_v4', JSON.stringify(a)); }
+function ratesLoad(){ return Store.read('ei_rates_v4', []); }
+function ratesSave(a){ Store.write('ei_rates_v4', a); }
 
 // Adds any known code that is not already present, leaving existing rows
 // alone, so a rate added in a later release appears without re-entering
@@ -4517,11 +4562,11 @@ function seedRates(){
   // carries one modifier, so claims send the discipline modifier alone. Strip
   // the 96 that earlier versions seeded, or those installs would keep sending
   // a two-modifier combination no example in the guide uses.
-  if(arr.length && localStorage.getItem('ei_rates_mod_migrated') !== '1'){
+  if(arr.length && Store.readRaw('ei_rates_mod_migrated') !== '1'){
     var touched = false;
     arr.forEach(function(r){ if(r.mod === '96'){ r.mod = ''; touched = true; } });
     if(touched) ratesSave(arr);
-    localStorage.setItem('ei_rates_mod_migrated','1');
+    Store.writeRaw('ei_rates_mod_migrated','1');
   }
   // NYS EI Service Rates effective 10/1/2024, New York City column.
   // Service coordination is the only per-unit rate in the schedule -- it is
@@ -4661,7 +4706,7 @@ function disciplineModifier(servType){
 // payer expects -- and every example in it shows a single modifier. Since that
 // can only be settled by a 277 coming back, it is a setting rather than a
 // decision baked into the code.
-function modFormat(){ return localStorage.getItem('ei_modformat_v4') || 'discipline'; }
+function modFormat(){ return Store.readRaw('ei_modformat_v4') || 'discipline'; }
 
 function modifierSuffix(servType, rateMod, bilingual){
   var fmt = modFormat();
@@ -4699,7 +4744,7 @@ function renderModFormatPreview(){
 }
 
 function saveModFormat(){
-  localStorage.setItem('ei_modformat_v4', g('modFormatSel'));
+  Store.writeRaw('ei_modformat_v4', g('modFormatSel'));
   showBadge('modFormatBadge');
   renderModFormatPreview();
   if(document.getElementById('billChildSel') && document.getElementById('billChildSel').value !== '') renderBillingSession();
@@ -4872,12 +4917,12 @@ var editDocId = null, editRxId = null;
 // Referring provider used when no physician script applies -- service
 // coordination and evaluations. Without it those claims would name the
 // treating clinician as their own referrer, which is the bug fixed for therapy.
-function eioLoad(){ return JSON.parse(localStorage.getItem('ei_eio_v4')||'null'); }
+function eioLoad(){ return Store.read('ei_eio_v4', null); }
 function saveEIO(){
   var npi = g('eioNPI').replace(/[^0-9]/g,'');
   if(!g('eioLast')) return showError('eioError','Referring last name is required.');
   if(npi.length !== 10) return showError('eioError','NPI must be exactly 10 digits.');
-  localStorage.setItem('ei_eio_v4', JSON.stringify({firstName:g('eioFirst'), lastName:g('eioLast'), npi:npi, facility:g('facilityName')}));
+  Store.write('ei_eio_v4', {firstName:g('eioFirst'), lastName:g('eioLast'), npi:npi, facility:g('facilityName')});
   clearError('eioError'); showBadge('eioBadge');
 }
 function loadEIOForm(){
@@ -4885,10 +4930,10 @@ function loadEIOForm(){
   s('eioFirst',e.firstName); s('eioLast',e.lastName); s('eioNPI',e.npi); s('facilityName',e.facility||'');
 }
 
-function doctorsLoad(){ return JSON.parse(localStorage.getItem('ei_doctors_v4')||'[]'); }
-function doctorsSave(a){ localStorage.setItem('ei_doctors_v4', JSON.stringify(a)); }
-function scriptsLoad(){ return JSON.parse(localStorage.getItem('ei_scripts_v4')||'[]'); }
-function scriptsSave(a){ localStorage.setItem('ei_scripts_v4', JSON.stringify(a)); }
+function doctorsLoad(){ return Store.read('ei_doctors_v4', []); }
+function doctorsSave(a){ Store.write('ei_doctors_v4', a); }
+function scriptsLoad(){ return Store.read('ei_scripts_v4', []); }
+function scriptsSave(a){ Store.write('ei_scripts_v4', a); }
 function doctorName(d){ return d ? ('Dr. '+((d.firstName||'')+' '+(d.lastName||'')).trim()) : '—'; }
 function findDoctor(id){ return doctorsLoad().filter(function(d){ return d.id===id; })[0]||null; }
 
@@ -5073,13 +5118,13 @@ function checkScriptCoverage(childName, discipline, dateStr, category){
 // configuration rather than a licence gate: it lives in this browser, so an
 // agency admin can switch it back. Enforcing it centrally would need a server.
 function modulesLoad(){
-  var m = JSON.parse(localStorage.getItem('ei_modules_v4')||'null') || {};
+  var m = Store.read('ei_modules_v4', null) || {};
   return {billing: m.billing !== false};
 }
 function billingEnabled(){ return modulesLoad().billing; }
 function saveModules(){
   if(!isSuperAdmin()) return;
-  localStorage.setItem('ei_modules_v4', JSON.stringify({billing: document.getElementById('modBilling').checked}));
+  Store.write('ei_modules_v4', {billing: document.getElementById('modBilling').checked});
   showBadge('modBadge');
   applyRoleTabs(activeUser ? activeUser.role : 'admin');
   try{ updateAlertBadge(buildAlerts().filter(function(a){return a.sev==='crit';}).length); }catch(e){}
@@ -5107,13 +5152,14 @@ function downloadFile(name, text, mime){
 
 function exportBackup(){
   var data = {exportedAt:new Date().toISOString(), app:'Bloom Note', schema:'v4', records:{}};
+  data.agency = Store.agency();
   BACKUP_KEYS.forEach(function(k){
-    var v = localStorage.getItem(k);
+    var v = Store.readRaw(k);
     if(v !== null) data.records[k] = v;
   });
   var stamp = todayStr().replace(/-/g,'');
   downloadFile('bloomnote-backup-'+stamp+'.json', JSON.stringify(data, null, 2), 'application/json');
-  localStorage.setItem('ei_last_backup', new Date().toISOString());
+  Store.writeRaw('ei_last_backup', new Date().toISOString());
   renderBackupStatus();
 }
 
@@ -5125,11 +5171,11 @@ function esc(t){
 // A self-contained page, because the guidance requires records readable
 // without special programming, software or language.
 function exportReadableRecords(){
-  var kids = JSON.parse(localStorage.getItem('ei_c4')||'[]');
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
-  var scn = JSON.parse(localStorage.getItem('ei_sc_v4')||'[]');
-  var claims = JSON.parse(localStorage.getItem('ei_claims_v4')||'[]');
-  var p = JSON.parse(localStorage.getItem('ei_p4')||'{}');
+  var kids = childrenLoad();
+  var notes = notesLoad();
+  var scn = scLoad();
+  var claims = claimsLoad();
+  var p = profileLoad();
 
   var h = '<!doctype html><html><head><meta charset="utf-8"><title>Bloom Note Records '+esc(todayStr())+'</title><style>'
     + 'body{font-family:Arial,sans-serif;font-size:13px;margin:28px;color:#111;}'
@@ -5218,9 +5264,9 @@ function restoreBackup(){
     if(!confirm('Replace everything in this browser with the backup taken '
       + (data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'at an unknown time')
       + '?\n\n'+count+' record sets will be restored. Anything currently here is lost.')) return;
-    BACKUP_KEYS.forEach(function(k){ localStorage.removeItem(k); });
+    BACKUP_KEYS.forEach(function(k){ Store.remove(k); });
     Object.keys(data.records).forEach(function(k){
-      if(BACKUP_KEYS.indexOf(k) !== -1) localStorage.setItem(k, data.records[k]);
+      if(BACKUP_KEYS.indexOf(k) !== -1) Store.writeRaw(k, data.records[k]);
     });
     clearError('restoreError');
     alert('Restored. The app will reload.');
@@ -5233,9 +5279,9 @@ function restoreBackup(){
 function renderBackupStatus(){
   var el = document.getElementById('backupStatus');
   if(!el) return;
-  var last = localStorage.getItem('ei_last_backup');
-  var kids = JSON.parse(localStorage.getItem('ei_c4')||'[]').length;
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]').length;
+  var last = Store.readRaw('ei_last_backup');
+  var kids = childrenLoad().length;
+  var notes = notesLoad().length;
   if(!last){
     el.style.cssText = 'margin-bottom:12px;background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;font-size:.78rem;color:#b45309;line-height:1.5;';
     el.innerHTML = kids || notes
@@ -5278,8 +5324,8 @@ function canBill(){ return !activeUser || activeUser.role === 'admin' || activeU
 var activeUser = null;
 var editUserId = null;
 
-function usersLoad(){ return JSON.parse(localStorage.getItem('ei_users_v4')||'[]'); }
-function usersSave(a){ localStorage.setItem('ei_users_v4', JSON.stringify(a)); }
+function usersLoad(){ return Store.read('ei_users_v4', []); }
+function usersSave(a){ Store.write('ei_users_v4', a); }
 function userFullName(u){ return ((u.firstName||'')+' '+(u.lastName||'')).trim(); }
 
 function saveUser(){
@@ -5374,14 +5420,14 @@ function renderLoginList(){
 function loginAs(id){
   var u = usersLoad().filter(function(x){ return x.id===id; })[0];
   if(!u) return;
-  localStorage.setItem('ei_session_v4', JSON.stringify({userId:id}));
+  Store.write('ei_session_v4', {userId:id});
   applyActiveUser(u);
   document.getElementById('loginGate').classList.remove('show');
   document.getElementById('mainApp').style.removeProperty('display');
 }
 
 function logoutUser(){
-  localStorage.removeItem('ei_session_v4');
+  Store.remove('ei_session_v4');
   activeUser = null;
   document.getElementById('mainApp').style.display = 'none';
   renderLoginList();
@@ -5398,7 +5444,7 @@ function applyActiveUser(u){
     street:u.street||'', city:u.city||'', state:u.state||'', zip:u.zip||'', phone:u.phone||'',
     progId:(profile&&profile.progId)||'', type:(profile&&profile.type)||''
   };
-  localStorage.setItem('ei_p4', JSON.stringify(profile));
+  profileSave(profile);
   loadProfileForm();
   // Re-stamp the SC form for the new user, otherwise a switched-to user would
   // author notes under the previous person's name.
@@ -5436,7 +5482,7 @@ function initUsers(){
     renderUsers();
     return;
   }
-  var sess = JSON.parse(localStorage.getItem('ei_session_v4')||'null');
+  var sess = Store.read('ei_session_v4', null);
   var u = sess ? arr.filter(function(x){ return x.id===sess.userId; })[0] : null;
   if(u){ applyActiveUser(u); }
   else {
@@ -5452,8 +5498,8 @@ function initUsers(){
 // Companion Guide v5.0.0, SC uses Loop 2400 NTE (HHMM-HHMM, no visit-type
 // prefix) with each same-day encounter on its own service line — which is
 // why these are stored separately from therapist session notes.
-function scLoad(){ return JSON.parse(localStorage.getItem('ei_sc_v4')||'[]'); }
-function scSave(arr){ localStorage.setItem('ei_sc_v4', JSON.stringify(arr)); }
+function scLoad(){ return Store.read('ei_sc_v4', []); }
+function scSave(arr){ Store.write('ei_sc_v4', arr); }
 
 function renderScChildSel(){
   var sel = document.getElementById('scChild');
@@ -5716,7 +5762,7 @@ function findAndRestoreData(){
         // Restore if we don't have children yet
         if(!children.length || children.length === 0){
           children = parsed;
-          localStorage.setItem('ei_c4', JSON.stringify(children));
+          childrenSave(children);
           renderChildList();
           renderChildSel();
           restored = true;
@@ -5727,7 +5773,7 @@ function findAndRestoreData(){
         found.push('PROFILE KEY: ' + key + ' → ' + parsed.name);
         if(!profile.name){
           profile = parsed;
-          localStorage.setItem('ei_p4', JSON.stringify(profile));
+          profileSave(profile);
           loadProfileForm();
           found.push(' RESTORED profile from ' + key);
         }
@@ -5769,7 +5815,7 @@ function getSessionDuration(){
 
 
 function editDraftNote(noteId){
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var notes = notesLoad();
   var note = null;
   for(var i=0;i<notes.length;i++){ if(notes[i].id===noteId){ note=notes[i]; break; } }
   if(!note) return alert('Note not found.');
@@ -5796,7 +5842,7 @@ function editDraftNote(noteId){
 
 
 function viewFormattedNote(noteId){
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var notes = notesLoad();
   var n = null;
   for(var i=0;i<notes.length;i++){ if(notes[i].id===noteId){ n=notes[i]; break; } }
   if(!n) return alert('Note not found.');
@@ -5819,7 +5865,7 @@ function viewFormattedNote(noteId){
   var delivery = parseField(n.header,'Session Delivered');
   var icd = parseField(n.header,'ICD-10');
   var cpt = parseField(n.header,'CPT');
-  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var slogData = slogLoad();
   var childSlog = slogData[childName]||{};
   var sig = childSlog[noteId]||{};
   var sigDate = sig.sigDate || '___/___/______';
@@ -5880,7 +5926,7 @@ function viewSlogNote(noteId){
     container.style.display = 'none';
     return;
   }
-  var notes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var notes = notesLoad();
   var n = null;
   for(var i=0;i<notes.length;i++){ if(notes[i].id===noteId){ n=notes[i]; break; } }
   if(!n){ alert('Note not found.'); return; }
@@ -5890,7 +5936,7 @@ function viewSlogNote(noteId){
     return match ? match[1].trim() : '—';
   }
 
-  var slogData = JSON.parse(localStorage.getItem('ei_slog_v4')||'{}');
+  var slogData = slogLoad();
   var childSlog2 = slogData[n.childName]||{};
   var sig2 = childSlog2[noteId]||{};
 
@@ -5950,7 +5996,7 @@ function showAuthSummary(i){
   var auths = (c.auths||[]).filter(function(a){ return a.num||a.serv||a.hours; });
   if(!auths.length){ alert('No authorizations entered for this child. Please edit the child profile and add authorization details.'); return; }
 
-  var allNotes = JSON.parse(localStorage.getItem('ei_notes_v4')||'[]');
+  var allNotes = notesLoad();
   var childNotes = allNotes.filter(function(n){
     return n.childName === c.name && n.status !== 'cancelled';
   });
