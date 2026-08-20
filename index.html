@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Notely — NYC EI</title>
+  <title>Bloom Note — NYC EI</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -169,6 +169,7 @@
     .role-admin{background:rgba(29,78,216,.1);border:1px solid #1d4ed8;color:#1d4ed8;}
     .role-therapist{background:var(--primary-glow);border:1px solid var(--primary);color:var(--primary);}
     .role-coordinator{background:rgba(245,158,11,.12);border:1px solid #f59e0b;color:#b45309;}
+    .role-biller{background:rgba(109,40,217,.1);border:1px solid #6d28d9;color:#6d28d9;}
     /* Bar showing who is acting, with a way to switch */
     .whoami{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--light);border-bottom:1px solid var(--border);padding:8px 16px;font-size:.76rem;}
     .whoami b{font-size:.8rem;}
@@ -374,10 +375,10 @@
 <!-- HIPAA GATE -->
 <div class="hipaa-gate" id="hipaaGate">
   <div class="hipaa-logo"></div>
-  <div class="hipaa-title">Notely</div>
+  <div class="hipaa-title">Bloom Note</div>
   <div class="hipaa-subtitle">NYC EI · HIPAA ACKNOWLEDGMENT</div>
   <div class="hipaa-card">
-    <p><strong>This application is for authorized use only.</strong> By accessing Notely, you acknowledge and agree to the following:</p>
+    <p><strong>This application is for authorized use only.</strong> By accessing Bloom Note, you acknowledge and agree to the following:</p>
     <p>• All session notes and child information entered are Protected Health Information (PHI) under HIPAA.</p>
     <p>• You are responsible for ensuring your device is secure, password-protected, and not accessible to unauthorized individuals.</p>
     <p>• Do not share, screenshot, or transmit session data through unsecured channels.</p>
@@ -388,13 +389,13 @@
     <input type="checkbox" id="hipaaChk" onchange="onHipaaCheck()"/>
     <span>I understand and agree to handle all Protected Health Information (PHI) in compliance with HIPAA regulations and NYC Early Intervention program requirements.</span>
   </label>
-  <button class="hipaa-btn" id="hipaaContinueBtn" onclick="acceptHipaa()" disabled>Continue to Notely</button>
+  <button class="hipaa-btn" id="hipaaContinueBtn" onclick="acceptHipaa()" disabled>Continue to Bloom Note</button>
   <div class="hipaa-version">v4.0 · NYC EI Individual Session Note 6/13/2025</div>
 </div>
 
 <!-- ══════════ USER SELECT ══════════ -->
 <div class="login-gate" id="loginGate">
-  <div class="hipaa-title">Who is using Notely?</div>
+  <div class="hipaa-title">Who is using Bloom Note?</div>
   <div class="hipaa-subtitle">Select your name to continue</div>
   <div id="loginList" style="width:100%;"></div>
   <div class="ibox" style="margin-top:14px;font-size:.74rem;">
@@ -1233,6 +1234,7 @@
           <select id="uRole">
             <option value="therapist">Therapist / Provider</option>
             <option value="coordinator">Service Coordinator</option>
+            <option value="biller">Billing</option>
             <option value="admin">Agency Admin</option>
           </select>
         </div>
@@ -1637,7 +1639,7 @@
     </div>
 
     <!-- Invoice number -->
-    <div class="mb12">
+    <div class="mb12" id="billInvoiceWrap">
       <div class="field-label" style="font-size:.68rem;color:var(--muted);font-family:var(--mono);margin-bottom:4px;text-transform:uppercase;">Invoice # (must be unique)</div>
       <input type="text" id="billInvoiceNum" placeholder="e.g. INV20260719001" style="width:100%;"/>
     </div>
@@ -1648,11 +1650,13 @@
       <div style="font-family:var(--mono);font-size:.68rem;color:var(--primary);text-transform:uppercase;margin-bottom:8px;font-weight:600;">Sessions to Bill</div>
       <div id="billSessionRows"></div>
       <div id="billTotal" style="background:var(--light);border-radius:10px;padding:12px;margin-top:12px;font-size:.85rem;"></div>
-      <button class="btn-p" style="margin-top:14px;" onclick="generate837P()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Generate &amp; Download 837P File</button>
+      <div id="billSubmitNote" class="ibox" style="display:none;font-size:.76rem;margin-top:12px;">This shows which of your sessions have been billed. Claims are submitted by your agency's billing staff.</div>
+      <button class="btn-p" id="billGenerateBtn" style="margin-top:14px;" onclick="generate837P()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Generate &amp; Download 837P File</button>
       <div id="billError" style="display:none;background:rgba(220,38,38,.08);border:1px solid var(--red);border-radius:8px;padding:10px;margin-top:10px;font-size:.82rem;color:#dc2626;"></div>
     </div>
 
     <!-- RESPONSE FILE -->
+    <div id="ack999Section">
     <div class="div" style="margin-top:26px;"></div>
     <div class="slabel">Read a 999 Response</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">EI-Hub returns a 999 straight after an upload, saying whether the file was accepted. Paste it here or choose the file, and it will be read out in plain terms.</div>
@@ -1660,8 +1664,10 @@
     <textarea id="ack999Text" rows="4" placeholder="…or paste the contents of the 999 here" style="font-family:var(--mono);font-size:.72rem;"></textarea>
     <button class="btn-p" onclick="parse999()" style="margin-top:10px;">Read Response</button>
     <div id="ack999Out" style="margin-top:12px;"></div>
+    </div>
 
     <!-- SUMMARY -->
+    <div id="summarySection">
     <div class="div" style="margin-top:26px;"></div>
     <div class="slabel">Summary</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Work delivered across all children in a date range, and how much of it has been billed.</div>
@@ -1677,13 +1683,16 @@
     </div>
     <div id="summaryOut"></div>
     <button class="btn-s" onclick="exportSummaryCsv()" style="margin-top:10px;">Export Summary (CSV)</button>
+    </div>
 
     <!-- CLAIMS LEDGER -->
+    <div id="claimsSection">
     <div class="div" style="margin-top:26px;"></div>
     <div class="slabel">Submitted Claims</div>
     <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px;line-height:1.5;">Every claim this app has generated. Mark what the 999 and 277 came back with — a rejected claim is raised in Alerts until it is resolved.</div>
     <div id="claimsEmpty" class="ibox">No claims generated yet.</div>
     <div id="claimsList"></div>
+    </div>
 
     <!-- RATE SCHEDULE (admin only -- reimbursement amounts are not shown to clinicians) -->
     <div id="rateSection">
@@ -1917,8 +1926,16 @@ function showPage(page, el){
   if(page === 'servicelog'){ renderSlogChildSel(); renderServiceLog(); }
   if(page === 'billing'){
     renderBillingChildSel();
-    renderClaims();
-    renderSummary();
+    // Clinicians see whether their work has been billed; submitting, pricing
+    // and the claim ledger belong to whoever does the billing.
+    var mayBill = canBill();
+    ['billInvoiceWrap','billGenerateBtn','claimsSection','ack999Section','summarySection'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = mayBill ? '' : 'none';
+    });
+    var sn = document.getElementById('billSubmitNote');
+    if(sn) sn.style.display = mayBill ? 'none' : 'block';
+    if(mayBill){ renderClaims(); renderSummary(); }
     // Reimbursement amounts are agency business, not clinical information, so
     // the whole schedule is hidden from anyone who is not an admin.
     var showRates = isAdmin();
@@ -3139,11 +3156,14 @@ function renderBillingSession(){
     var amount = pr.error ? '0.00' : pr.amount.toFixed(2);
     totalUnits += units;
     totalAmount += parseFloat(amount);
-    var billedBadge = n.billed ? '<span style="background:rgba(22,163,74,.1);color:#15803d;font-size:.65rem;padding:2px 6px;border-radius:10px;margin-left:6px;">Billed</span>' : '';
+    // For a clinician the right-hand column already states the billing status,
+    // so the badge would just repeat it.
+    var billedBadge = (n.billed && canBill()) ? '<span style="background:rgba(22,163,74,.1);color:#15803d;font-size:.65rem;padding:2px 6px;border-radius:10px;margin-left:6px;">Billed</span>' : '';
     rows += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:.82rem;">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
       + '<div style="font-weight:600;">'+n.sessDate+billedBadge+'</div>'
-      + '<div style="font-family:var(--mono);font-size:.7rem;color:var(--primary);">'+units+' units · $'+amount+'</div>'
+      + '<div style="font-family:var(--mono);font-size:.7rem;color:var(--primary);">'
+      + (canBill() ? units+' units · $'+amount : (n.billed ? 'Billed' : 'Not yet billed'))+'</div>'
       + '</div>'
       + '<div style="color:var(--muted);font-size:.76rem;">Time: '+timeStr+' · CPT: '+(cptCode||'—')+' · Visit: '+visitType+' · POS: '+placeOfSvc
       + (pr.error ? '' : ' · '+(pr.basis==='session' ? mins+'-min session rate' : 'per unit')+' @ $'+pr.amount.toFixed(2))+'</div>'
@@ -3191,10 +3211,16 @@ function renderBillingSession(){
       + 'Service coordination cannot bill until a County / EIO referring provider is set under the Scripts tab.</div>';
   }
   document.getElementById('billSessionRows').innerHTML = rows;
-  document.getElementById('billTotal').innerHTML = '<b>Total Sessions:</b> '+childNotes.length+' &nbsp;·&nbsp; <b>Total Units:</b> '+totalUnits+' &nbsp;·&nbsp; <b>Total Amount:</b> $'+totalAmount.toFixed(2);
+  document.getElementById('billTotal').innerHTML = canBill()
+    ? '<b>Total Sessions:</b> '+childNotes.length+' &nbsp;·&nbsp; <b>Total Units:</b> '+totalUnits+' &nbsp;·&nbsp; <b>Total Amount:</b> $'+totalAmount.toFixed(2)
+    : '<b>Total Sessions:</b> '+childNotes.length;
 }
 
 function generate837P(){
+  if(!canBill()){
+    alert('Claims are submitted by your agency billing staff.\n\nYou can see which of your sessions have been billed, but not submit them.');
+    return;
+  }
   var idx = document.getElementById('billChildSel').value;
   if(idx === '') return;
   var c = children[parseInt(idx)];
@@ -4215,7 +4241,7 @@ function exportSummaryCsv(){
   var csv = rows.map(function(r){
     return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
   }).join('\n');
-  downloadFile('notely-summary-'+todayStr().replace(/-/g,'')+'.csv', csv, 'text/csv');
+  downloadFile('bloomnote-summary-'+todayStr().replace(/-/g,'')+'.csv', csv, 'text/csv');
 }
 
 // ── CLAIMS LEDGER ─────────────────────────────────────────────
@@ -5035,13 +5061,13 @@ function downloadFile(name, text, mime){
 }
 
 function exportBackup(){
-  var data = {exportedAt:new Date().toISOString(), app:'Notely', schema:'v4', records:{}};
+  var data = {exportedAt:new Date().toISOString(), app:'Bloom Note', schema:'v4', records:{}};
   BACKUP_KEYS.forEach(function(k){
     var v = localStorage.getItem(k);
     if(v !== null) data.records[k] = v;
   });
   var stamp = todayStr().replace(/-/g,'');
-  downloadFile('notely-backup-'+stamp+'.json', JSON.stringify(data, null, 2), 'application/json');
+  downloadFile('bloomnote-backup-'+stamp+'.json', JSON.stringify(data, null, 2), 'application/json');
   localStorage.setItem('ei_last_backup', new Date().toISOString());
   renderBackupStatus();
 }
@@ -5060,7 +5086,7 @@ function exportReadableRecords(){
   var claims = JSON.parse(localStorage.getItem('ei_claims_v4')||'[]');
   var p = JSON.parse(localStorage.getItem('ei_p4')||'{}');
 
-  var h = '<!doctype html><html><head><meta charset="utf-8"><title>Notely Records '+esc(todayStr())+'</title><style>'
+  var h = '<!doctype html><html><head><meta charset="utf-8"><title>Bloom Note Records '+esc(todayStr())+'</title><style>'
     + 'body{font-family:Arial,sans-serif;font-size:13px;margin:28px;color:#111;}'
     + 'h1{font-size:19px;border-bottom:2px solid #000;padding-bottom:6px;}'
     + 'h2{font-size:15px;margin:26px 0 8px;background:#eee;padding:6px 8px;}'
@@ -5131,7 +5157,7 @@ function exportReadableRecords(){
 
   if(!kids.length) h += '<p>No children on file.</p>';
   h += '</body></html>';
-  downloadFile('notely-records-'+todayStr().replace(/-/g,'')+'.html', h, 'text/html');
+  downloadFile('bloomnote-records-'+todayStr().replace(/-/g,'')+'.html', h, 'text/html');
 }
 
 function restoreBackup(){
@@ -5142,7 +5168,7 @@ function restoreBackup(){
     var data;
     try { data = JSON.parse(e.target.result); }
     catch(err){ return showError('restoreError','That file is not readable as a backup.'); }
-    if(!data || !data.records) return showError('restoreError','That file is not a Notely backup.');
+    if(!data || !data.records) return showError('restoreError','That file is not a Bloom Note backup.');
     var count = Object.keys(data.records).length;
     if(!confirm('Replace everything in this browser with the backup taken '
       + (data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'at an unknown time')
@@ -5187,15 +5213,19 @@ function renderBackupStatus(){
 // this browser and anyone with the device can switch users. It exists to shape
 // the UI per role and stamp notes with an author. Real access control has to
 // come from a server when this moves off localStorage.
-var ROLE_LABELS = {admin:'Agency Admin', therapist:'Therapist', coordinator:'Service Coordinator'};
+var ROLE_LABELS = {admin:'Agency Admin', biller:'Billing', therapist:'Therapist', coordinator:'Service Coordinator'};
 // Which tabs each role may open. Admin sees everything.
 var ROLE_TABS = {
   admin:       ['note','sc','alerts','users','scripts','children','profile','history','attendance','servicelog','billing'],
+  biller:      ['alerts','scripts','children','profile','history','attendance','servicelog','billing'],
   therapist:   ['note','alerts','scripts','children','profile','history','attendance','servicelog','billing'],
   coordinator: ['sc','alerts','scripts','children','profile','history','billing']
 };
 // Only an admin edits the registries; everyone else sees them read-only.
 function isAdmin(){ return !activeUser || activeUser.role === 'admin'; }
+// Submitting claims is a back-office job. Clinicians can see which of their
+// sessions have been billed, but not generate or send anything.
+function canBill(){ return !activeUser || activeUser.role === 'admin' || activeUser.role === 'biller'; }
 var activeUser = null;
 var editUserId = null;
 
