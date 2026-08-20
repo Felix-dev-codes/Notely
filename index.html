@@ -1302,6 +1302,19 @@
       <div id="uEmpty" class="ibox">No staff added yet.</div>
       <div id="uList"></div>
 
+      <!-- MODULES -->
+      <div class="div" style="margin-top:26px;"></div>
+      <div class="slabel">Modules</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Agencies that use Bloom Note only for note taking can switch billing off. Nothing is deleted — claims, rates and ledger entries stay put and reappear if it is switched back on.</div>
+      <label style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;">
+        <input type="checkbox" id="modBilling" onchange="saveModules()" style="width:18px;height:18px;accent-color:var(--primary);"/>
+        <span>
+          <span style="font-weight:600;font-size:.9rem;">Billing</span>
+          <span style="display:block;font-size:.72rem;color:var(--muted);line-height:1.4;">Claim generation, rate schedule, claims ledger and response files.</span>
+        </span>
+      </label>
+      <div class="sbadge" id="modBadge">Saved</div>
+
       <!-- DATA & BACKUP -->
       <div class="div" style="margin-top:26px;"></div>
       <div class="slabel">Records &amp; Backup</div>
@@ -1949,7 +1962,7 @@ function showPage(page, el){
     }
   }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
-  if(page === 'users'){ renderUsers(); renderBackupStatus(); }
+  if(page === 'users'){ renderUsers(); renderBackupStatus(); loadModulesForm(); }
   if(page === 'alerts'){ renderAlerts(); }
   if(page === 'scripts'){
     renderDoctors(); renderRxSelects(); renderScripts(); loadEIOForm();
@@ -3834,7 +3847,7 @@ function buildAlerts(){
       var mine = scripts.filter(function(r){ return r.childName===c.name && r.discipline===serv; });
       if(!mine.length){
         out.push({sev:'crit', cat:'Script', who:c.name,
-          msg:'No '+serv+' script on file. Sessions cannot be billed.', act:'scripts'});
+          msg:'No '+serv+' script on file.'+(billingEnabled()?' Sessions cannot be billed.':' A physician order is required for direct therapy.'), act:'scripts'});
       } else {
         var current = mine.filter(function(r){ return r.startDate <= today && today <= r.endDate; });
         if(!current.length){
@@ -3926,19 +3939,22 @@ function buildAlerts(){
   // Only the name is enforced when a child is saved, so these fields can sit
   // empty for weeks and only surface when a claim is refused.
   visibleChildIdx().map(function(i){ return children[i]; }).forEach(function(c){
+    var billing = billingEnabled();
     var missing = [];
-    if(!c.ei) missing.push('EI number');
+    // EI number and CPT only matter for a claim; service type drives the
+    // script rule and matters either way.
+    if(billing && !c.ei) missing.push('EI number');
     if(!c.servType) missing.push('service type');
-    if(!c.icd) missing.push('ICD-10 code');
-    if(!c.cpt) missing.push('CPT code');
+    if(billing && !c.icd) missing.push('ICD-10 code');
+    if(billing && !c.cpt) missing.push('CPT code');
     if(!missing.length) return;
     // No service type means the script rule cannot run at all, which is worse
     // than a missing field: nothing is checking that child.
-    var blocking = !c.ei || !c.servType || !c.cpt;
+    var blocking = (billing && (!c.ei || !c.cpt)) || !c.servType;
     out.push({sev: blocking ? 'crit' : 'warn', cat:'Child Record', who:c.name,
       msg:'Missing ' + missing.join(', ') + '. '
         + (!c.servType ? 'Without a service type nothing checks this child for a physician order. ' : '')
-        + (blocking ? 'Sessions cannot be billed until this is filled in.' : 'A claim would fall back to a default.'),
+        + (billing ? (blocking ? 'Sessions cannot be billed until this is filled in.' : 'A claim would fall back to a default.') : ''),
       act:'children'});
   });
 
@@ -3974,7 +3990,7 @@ function buildAlerts(){
   }
 
   // — Claims the payer turned down —
-  claimsLoad().forEach(function(cl){
+  if(billingEnabled()) claimsLoad().forEach(function(cl){
     if(cl.status !== 'rejected') return;
     out.push({sev:'crit', cat:'Denial', who:cl.childName,
       msg:'Claim '+cl.claimId+' ('+cl.serviceDate+', '+cl.cpt+', $'+Number(cl.amount).toFixed(2)+') was rejected'
@@ -3982,15 +3998,15 @@ function buildAlerts(){
         + (cl.eiHubClaimId ? '' : ' No EI-Hub claim ID recorded, which a corrected claim needs.'),
       act:'billing'});
   });
-  var awaiting = claimsLoad().filter(function(cl){ return cl.status === 'submitted'; }).length;
+  var awaiting = billingEnabled() ? claimsLoad().filter(function(cl){ return cl.status === 'submitted'; }).length : 0;
   if(awaiting) out.push({sev:'info', cat:'Claims', who:'',
     msg:awaiting+' claim'+(awaiting===1?'':'s')+' submitted with no response recorded yet.', act:'billing'});
 
   // — Work delivered but not yet billed —
-  var unbilled = notes.filter(function(n){ return !n.billed && n.status !== 'cancelled'; }).length;
+  var unbilled = billingEnabled() ? notes.filter(function(n){ return !n.billed && n.status !== 'cancelled'; }).length : 0;
   if(unbilled) out.push({sev:'info', cat:'Billing', who:'',
     msg:unbilled+' session'+(unbilled===1?'':'s')+' documented but not yet billed.', act:'billing'});
-  var scUnbilled = scLoad().filter(function(n){ return !n.billed; }).length;
+  var scUnbilled = billingEnabled() ? scLoad().filter(function(n){ return !n.billed; }).length : 0;
   if(scUnbilled) out.push({sev:'info', cat:'Billing', who:'',
     msg:scUnbilled+' service coordination contact'+(scUnbilled===1?'':'s')+' not yet billed.', act:'billing'});
 
@@ -5044,6 +5060,26 @@ function checkScriptCoverage(childName, discipline, dateStr, category){
     reason:'Covered by '+doctorName(doc)+' ('+sc.startDate+' → '+sc.endDate+').'};
 }
 
+// ── MODULES ───────────────────────────────────────────────────
+// An agency using Bloom Note only for notes can switch billing off. This is
+// configuration rather than a licence gate: it lives in this browser, so an
+// agency admin can switch it back. Enforcing it centrally would need a server.
+function modulesLoad(){
+  var m = JSON.parse(localStorage.getItem('ei_modules_v4')||'null') || {};
+  return {billing: m.billing !== false};
+}
+function billingEnabled(){ return modulesLoad().billing; }
+function saveModules(){
+  localStorage.setItem('ei_modules_v4', JSON.stringify({billing: document.getElementById('modBilling').checked}));
+  showBadge('modBadge');
+  applyRoleTabs(activeUser ? activeUser.role : 'admin');
+  try{ updateAlertBadge(buildAlerts().filter(function(a){return a.sev==='crit';}).length); }catch(e){}
+}
+function loadModulesForm(){
+  var el = document.getElementById('modBilling');
+  if(el) el.checked = billingEnabled();
+}
+
 // ── RECORDS & BACKUP ──────────────────────────────────────────
 // EIP requires records kept six years and readable without special software.
 // Everything lives in this browser, so clearing site data destroys it: these
@@ -5365,6 +5401,7 @@ function applyActiveUser(u){
 
 function applyRoleTabs(role){
   var allowed = ROLE_TABS[role] || ROLE_TABS.therapist;
+  if(!billingEnabled()) allowed = allowed.filter(function(t){ return t !== 'billing'; });
   document.querySelectorAll('.nav-strip-tab').forEach(function(t){
     var m = (t.getAttribute('onclick')||'').match(/showPage\('([a-z]+)'/);
     var page = m ? m[1] : '';
