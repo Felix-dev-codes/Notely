@@ -958,11 +958,15 @@
           </div>
           <div class="g2 mb12">
             <div><div class="field-label">Total Hours</div><input type="number" id="nCAuth1Hours" placeholder="e.g. 260" min="0"/></div>
-            <div><div class="field-label">Start Date</div><input type="date" id="nCAuth1Start"/></div>
+            <div><div class="field-label">Start Date</div><input type="date" id="nCAuth1Start" onchange="updateAuthPattern(1)"/></div>
+          </div>
+          <div class="g2 mb12">
+            <div><div class="field-label">End Date</div><input type="date" id="nCAuth1End" onchange="updateAuthPattern(1)"/></div>
+            <div><div class="field-label">Sessions / Week</div><input type="number" id="nCAuth1Freq" placeholder="e.g. 5" min="0" oninput="updateAuthPattern(1)"/></div>
           </div>
           <div class="g2">
-            <div><div class="field-label">End Date</div><input type="date" id="nCAuth1End"/></div>
-            <div></div>
+            <div><div class="field-label">Minutes / Session</div><input type="number" id="nCAuth1Mins" placeholder="e.g. 60" min="0" step="5" oninput="updateAuthPattern(1)"/></div>
+            <div><div class="field-label">Pattern</div><div id="nCAuth1Pattern" style="font-family:var(--mono);font-size:.78rem;padding:9px 0;color:var(--muted);">&mdash;</div></div>
           </div>
         </div>
 
@@ -977,11 +981,15 @@
           </div>
           <div class="g2 mb12">
             <div><div class="field-label">Total Hours</div><input type="number" id="nCAuth2Hours" placeholder="e.g. 65" min="0"/></div>
-            <div><div class="field-label">Start Date</div><input type="date" id="nCAuth2Start"/></div>
+            <div><div class="field-label">Start Date</div><input type="date" id="nCAuth2Start" onchange="updateAuthPattern(2)"/></div>
+          </div>
+          <div class="g2 mb12">
+            <div><div class="field-label">End Date</div><input type="date" id="nCAuth2End" onchange="updateAuthPattern(2)"/></div>
+            <div><div class="field-label">Sessions / Week</div><input type="number" id="nCAuth2Freq" placeholder="e.g. 5" min="0" oninput="updateAuthPattern(2)"/></div>
           </div>
           <div class="g2">
-            <div><div class="field-label">End Date</div><input type="date" id="nCAuth2End"/></div>
-            <div></div>
+            <div><div class="field-label">Minutes / Session</div><input type="number" id="nCAuth2Mins" placeholder="e.g. 60" min="0" step="5" oninput="updateAuthPattern(2)"/></div>
+            <div><div class="field-label">Pattern</div><div id="nCAuth2Pattern" style="font-family:var(--mono);font-size:.78rem;padding:9px 0;color:var(--muted);">&mdash;</div></div>
           </div>
         </div>
 
@@ -996,11 +1004,15 @@
           </div>
           <div class="g2 mb12">
             <div><div class="field-label">Total Hours</div><input type="number" id="nCAuth3Hours" placeholder="e.g. 40" min="0"/></div>
-            <div><div class="field-label">Start Date</div><input type="date" id="nCAuth3Start"/></div>
+            <div><div class="field-label">Start Date</div><input type="date" id="nCAuth3Start" onchange="updateAuthPattern(3)"/></div>
+          </div>
+          <div class="g2 mb12">
+            <div><div class="field-label">End Date</div><input type="date" id="nCAuth3End" onchange="updateAuthPattern(3)"/></div>
+            <div><div class="field-label">Sessions / Week</div><input type="number" id="nCAuth3Freq" placeholder="e.g. 5" min="0" oninput="updateAuthPattern(3)"/></div>
           </div>
           <div class="g2">
-            <div><div class="field-label">End Date</div><input type="date" id="nCAuth3End"/></div>
-            <div></div>
+            <div><div class="field-label">Minutes / Session</div><input type="number" id="nCAuth3Mins" placeholder="e.g. 60" min="0" step="5" oninput="updateAuthPattern(3)"/></div>
+            <div><div class="field-label">Pattern</div><div id="nCAuth3Pattern" style="font-family:var(--mono);font-size:.78rem;padding:9px 0;color:var(--muted);">&mdash;</div></div>
           </div>
         </div>
       </div>
@@ -2277,9 +2289,9 @@ function saveChild(){
   var child = {
     name:name, dob:g('nCDOB'), sex:g('nCSex'), ei:g('nCEI'), auth:g('nCAuth'), ifspStart:g('nCIfspStart'), street:g('nCStreet'), city:g('nCCity'), state:g('nCState')||'NY', zip:g('nCZip'),
     auths:[
-      {num:g('nCAuth1'),serv:g('nCAuth1Serv'),hours:g('nCAuth1Hours'),start:g('nCAuth1Start'),end:g('nCAuth1End')},
-      {num:g('nCAuth2'),serv:g('nCAuth2Serv'),hours:g('nCAuth2Hours'),start:g('nCAuth2Start'),end:g('nCAuth2End')},
-      {num:g('nCAuth3'),serv:g('nCAuth3Serv'),hours:g('nCAuth3Hours'),start:g('nCAuth3Start'),end:g('nCAuth3End')}
+      {num:g('nCAuth1'),serv:g('nCAuth1Serv'),hours:g('nCAuth1Hours'),start:g('nCAuth1Start'),end:g('nCAuth1End'),freq:g('nCAuth1Freq'),mins:g('nCAuth1Mins')},
+      {num:g('nCAuth2'),serv:g('nCAuth2Serv'),hours:g('nCAuth2Hours'),start:g('nCAuth2Start'),end:g('nCAuth2End'),freq:g('nCAuth2Freq'),mins:g('nCAuth2Mins')},
+      {num:g('nCAuth3'),serv:g('nCAuth3Serv'),hours:g('nCAuth3Hours'),start:g('nCAuth3Start'),end:g('nCAuth3End'),freq:g('nCAuth3Freq'),mins:g('nCAuth3Mins')}
     ],
     servType:g('nCServType'), approach:g('nCApproach'), authCode:getAuthCode(), duration:getSessionDuration(), icd:g('nCICD'),
     cpt:g('nCCPT'), cpt2:g('nCCPT2'), cpt3:g('nCCPT3'), cpt4:g('nCCPT4'), goals:[].concat(tempGoals)
@@ -2292,9 +2304,10 @@ function saveChild(){
 }
 function clearChildForm(){
   ['nCAuth1Serv','nCAuth2Serv','nCAuth3Serv','nCSex','nCServType','nCApproach','nCDuration'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });;
-  ['nCName','nCDOB','nCSex','nCEI','nCAuth','nCStreet','nCCity','nCState','nCZip','nCAuth1','nCAuth1Hours','nCAuth1Start','nCAuth1End','nCAuth2','nCAuth2Hours','nCAuth2Start','nCAuth2End','nCAuth3','nCAuth3Hours','nCAuth3Start','nCAuth3End','nCServType','nCApproach','nCDuration','nCCustomAuth','nCICD','nCCPT','nCCPT2','nCCPT3','nCCPT4'].forEach(function(id){
+  ['nCName','nCDOB','nCSex','nCEI','nCAuth','nCStreet','nCCity','nCState','nCZip','nCAuth1','nCAuth1Hours','nCAuth1Start','nCAuth1End','nCAuth1Freq','nCAuth1Mins','nCAuth2','nCAuth2Hours','nCAuth2Start','nCAuth2End','nCAuth2Freq','nCAuth2Mins','nCAuth3','nCAuth3Hours','nCAuth3Start','nCAuth3End','nCAuth3Freq','nCAuth3Mins','nCServType','nCApproach','nCDuration','nCCustomAuth','nCICD','nCCPT','nCCPT2','nCCPT3','nCCPT4'].forEach(function(id){
     var e = document.getElementById(id); if(e) e.value = '';
   });
+  [1,2,3].forEach(updateAuthPattern);
   tempGoals = []; renderTempGoals();
 }
 function editChild(i){
@@ -2305,6 +2318,8 @@ function editChild(i){
     var a=auths[ai]||{};
     s('nCAuth'+(ai+1),a.num||''); s('nCAuth'+(ai+1)+'Serv',a.serv||'');
     s('nCAuth'+(ai+1)+'Hours',a.hours||''); s('nCAuth'+(ai+1)+'Start',a.start||''); s('nCAuth'+(ai+1)+'End',a.end||'');
+    s('nCAuth'+(ai+1)+'Freq',a.freq||''); s('nCAuth'+(ai+1)+'Mins',a.mins||'');
+    updateAuthPattern(ai+1);
   }
   s('nCServType',c.servType); s('nCApproach',c.approach); s('nCDuration',c.authCode||c.duration); s('nCICD',c.icd); updateAuthDisplay();
   s('nCCPT',c.cpt); s('nCCPT2',c.cpt2); s('nCCPT3',c.cpt3); s('nCCPT4',c.cpt4);
@@ -3900,6 +3915,93 @@ function daysUntil(dateStr){
 // Minutes a note ran, from its stored header.
 function noteMins(n){ return headerMins(n.header||''); }
 
+// An IFSP authorises a frequency, not just a pool of hours. "5x60" is five
+// sixty-minute sessions a week — the shape intensive SI and ABA is written in.
+// Both halves matter: exceeding the weekly count is unauthorised even when
+// hours remain, and falling short is a compliance finding of its own.
+// What an IFSP mandates is the weekly total: "20x60" is twenty sixty-minute
+// sessions a week. How those are spread is the clinician's call — twenty can be
+// met at four hours a day over five days, or five hours a day over four, or
+// nearly seven over three. So the daily figure is a range, not a number, and
+// only a week compressed into fewer days than this is worth questioning.
+var DELIVERY_DAYS_MIN = 3, DELIVERY_DAYS_MAX = 5;
+
+function authPattern(a){
+  var f = parseFloat((a && a.freq) || 0), m = parseFloat((a && a.mins) || 0);
+  if(!(f > 0) || !(m > 0)) return null;
+  var weekly = (f * m) / 60;
+  // Sessions are whole, so an uneven split loads the heaviest day with the
+  // ceiling: ten over three days is 4+3+3, not 3.3 each.
+  var perDayMin = Math.ceil(f / DELIVERY_DAYS_MAX);  // spread widest
+  var perDayMax = Math.ceil(f / DELIVERY_DAYS_MIN);  // packed tightest
+  return {freq:f, mins:m, label:f + '×' + m, weekly:weekly,
+          perDayMin:perDayMin, perDayMax:perDayMax,
+          dailyMin:(perDayMin * m) / 60, dailyMax:(perDayMax * m) / 60};
+}
+
+// "4–7 hrs/day over 3–5 days", or a single figure when they coincide.
+function dailyRangeText(p){
+  var lo = p.dailyMin.toFixed(1), hi = p.dailyMax.toFixed(1);
+  return (lo === hi ? lo : lo + '–' + hi) + ' hrs/day over '
+    + DELIVERY_DAYS_MIN + '–' + DELIVERY_DAYS_MAX + ' days';
+}
+
+// Weeks spanned by the authorisation window, inclusive of both end dates.
+function authWeeks(a){
+  if(!a || !a.start || !a.end) return null;
+  var ms = new Date(a.end + 'T00:00:00') - new Date(a.start + 'T00:00:00');
+  if(!(ms >= 0)) return null;
+  return (ms / 86400000 + 1) / 7;
+}
+
+// Total hours an authorisation covers. An explicitly entered figure wins;
+// otherwise the frequency and window imply it.
+function authTotalHours(a){
+  var h = parseFloat((a && a.hours) || 0);
+  if(h > 0) return {hours:h, derived:false};
+  var p = authPattern(a), w = authWeeks(a);
+  if(p && w) return {hours:p.weekly * w, derived:true};
+  return {hours:0, derived:false};
+}
+
+function isoDate(d){
+  return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
+}
+
+// Monday-to-Sunday week that ended most recently. The current week is not
+// worth judging — it may simply not be over yet.
+function lastCompleteWeek(){
+  var t = new Date(); t.setHours(0,0,0,0);
+  var mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+  var start = new Date(mon); start.setDate(mon.getDate() - 7);
+  var end = new Date(start); end.setDate(start.getDate() + 6);
+  return {start:isoDate(start), end:isoDate(end)};
+}
+
+// Does this note count against this authorisation? Service has to match where
+// both sides name one; a cancelled session never counts.
+function noteMatchesAuth(n, c, a){
+  if(n.childName !== c.name || n.status === 'cancelled') return false;
+  if(a.serv && n.servType &&
+     a.serv.split('(')[0].trim() !== n.servType.split('(')[0].trim()) return false;
+  return true;
+}
+
+// Live preview under the frequency fields on the child form.
+function updateAuthPattern(n){
+  var el = document.getElementById('nCAuth' + n + 'Pattern');
+  if(!el) return;
+  var a = {freq:g('nCAuth'+n+'Freq'), mins:g('nCAuth'+n+'Mins'),
+           start:g('nCAuth'+n+'Start'), end:g('nCAuth'+n+'End'), hours:g('nCAuth'+n+'Hours')};
+  var p = authPattern(a);
+  if(!p){ el.innerHTML = '&mdash;'; el.style.color = 'var(--muted)'; return; }
+  var txt = p.label + ' · ' + p.weekly.toFixed(1) + ' hrs/wk · ' + dailyRangeText(p);
+  var w = authWeeks(a);
+  if(w) txt += ' · ' + (p.weekly * w).toFixed(0) + ' hrs total';
+  el.textContent = txt;
+  el.style.color = 'var(--primary)';
+}
+
 function buildAlerts(){
   var out = [];
   var notes = notesLoad();
@@ -3933,7 +4035,7 @@ function buildAlerts(){
 
     // — Authorizations: window and hours consumed —
     (c.auths||[]).forEach(function(a){
-      if(!a.num && !a.hours) return;
+      if(!a.num && !a.hours && !a.freq) return;
       var label = 'Auth '+(a.num||'(no number)')+(a.serv?' · '+a.serv:'');
       if(a.end){
         var ad = daysUntil(a.end);
@@ -3945,24 +4047,68 @@ function buildAlerts(){
             msg:label+' expires in '+ad+' day'+(ad===1?'':'s')+' ('+a.end+').', act:'children'});
         }
       }
-      var total = parseFloat(a.hours||0);
+      var tot = authTotalHours(a), total = tot.hours;
       if(total > 0){
         var used = 0;
         notes.forEach(function(n){
-          if(n.childName !== c.name) return;
-          if(n.status === 'cancelled') return;
-          // Match the note's service to this authorisation where both are known
-          if(a.serv && n.servType && a.serv.split('(')[0].trim() !== n.servType.split('(')[0].trim()) return;
+          if(!noteMatchesAuth(n, c, a)) return;
           var m = noteMins(n);
           if(m > 0) used += m/60;
         });
         var pct = Math.round((used/total)*100);
+        var basis = tot.derived ? ' hours (implied by ' + authPattern(a).label + ' over the auth window)' : ' hours';
         if(used >= total){
           out.push({sev:'crit', cat:'Authorization', who:c.name,
-            msg:label+' fully used — '+used.toFixed(1)+' of '+total+' hours ('+pct+'%). Further sessions are unauthorised.', act:'children'});
+            msg:label+' fully used — '+used.toFixed(1)+' of '+total.toFixed(1)+basis+' ('+pct+'%). Further sessions are unauthorised.', act:'children'});
         } else if(pct >= 90){
           out.push({sev:'warn', cat:'Authorization', who:c.name,
-            msg:label+' at '+pct+'% — '+(total-used).toFixed(1)+' hours left of '+total+'.', act:'children'});
+            msg:label+' at '+pct+'% — '+(total-used).toFixed(1)+' of '+total.toFixed(1)+basis+' left.', act:'children'});
+        }
+      }
+
+      // — Weekly delivery against the authorised frequency —
+      var pat = authPattern(a);
+      if(pat){
+        var wk = lastCompleteWeek();
+        var windowOpen = (!a.start || a.start <= wk.start) && (!a.end || a.end >= wk.end);
+        // Only judge a case that is actually running. A brand-new or dormant
+        // authorisation would otherwise report a missed week every week.
+        var live = notes.some(function(n){
+          if(!noteMatchesAuth(n, c, a)) return false;
+          var d = daysUntil(n.sessDate);
+          return d !== null && d <= 0 && d >= -30;
+        });
+        if(windowOpen && live){
+          var cnt = notes.filter(function(n){
+            return noteMatchesAuth(n, c, a) && n.sessDate >= wk.start && n.sessDate <= wk.end;
+          }).length;
+          if(cnt > pat.freq){
+            out.push({sev:'crit', cat:'Authorization', who:c.name,
+              msg:label+' authorises '+pat.label+' — '+cnt+' sessions delivered in the week of '+wk.start+'. Anything past '+pat.freq+' a week is unauthorised.', act:'children'});
+          } else if(cnt < pat.freq){
+            out.push({sev:'warn', cat:'Authorization', who:c.name,
+              msg:label+' authorises '+pat.label+' — '+cnt+' of '+pat.freq+' sessions delivered in the week of '+wk.start+'. Missed sessions need a documented reason or a make-up.', act:'children'});
+          }
+
+          // Spreading the week is the clinician's call — 20x60 is equally valid
+          // at four hours over five days or five over four. Only a day heavier
+          // than the tightest reasonable schedule is worth raising.
+          var perDay = {};
+          notes.forEach(function(n){
+            if(!noteMatchesAuth(n, c, a)) return;
+            if(n.sessDate < wk.start || n.sessDate > wk.end) return;
+            var m = noteMins(n);
+            if(m > 0) perDay[n.sessDate] = (perDay[n.sessDate] || 0) + m/60;
+          });
+          Object.keys(perDay).sort().forEach(function(day){
+            // Half an hour of slack absorbs a session that ran slightly long
+            if(perDay[day] > pat.dailyMax + 0.5){
+              out.push({sev:'warn', cat:'Authorization', who:c.name,
+                msg:label+' is '+pat.weekly.toFixed(1)+' hrs a week — '+perDay[day].toFixed(1)
+                  +' hrs on '+day+' packs it into fewer than '+DELIVERY_DAYS_MIN
+                  +' days. Check the schedule is what the IFSP intends.', act:'children'});
+            }
+          });
         }
       }
     });
@@ -6019,7 +6165,7 @@ function viewSlogNote(noteId){
 function showAuthSummary(i){
   var c = children[i];
   if(!c) return;
-  var auths = (c.auths||[]).filter(function(a){ return a.num||a.serv||a.hours; });
+  var auths = (c.auths||[]).filter(function(a){ return a.num||a.serv||a.hours||a.freq; });
   if(!auths.length){ alert('No authorizations entered for this child. Please edit the child profile and add authorization details.'); return; }
 
   var allNotes = notesLoad();
@@ -6049,7 +6195,7 @@ function showAuthSummary(i){
   // Build auth blocks for each auth
   var authBlocks = '';
   auths.forEach(function(a, ai){
-    var totalHours = parseFloat(a.hours||0);
+    var authTot = authTotalHours(a), totalHours = authTot.hours;
     // Calculate hours used for this auth's service type
     var authHoursUsed = 0;
     childNotes.forEach(function(n){
@@ -6073,9 +6219,9 @@ function showAuthSummary(i){
 
     authBlocks += '<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">'
       + '<div style="font-family:var(--mono);font-size:.66rem;color:var(--primary);text-transform:uppercase;font-weight:600;margin-bottom:4px;">Auth '+(ai+1)+(a.serv?' — '+a.serv:'')+'</div>'
-      + '<div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;">Auth #: '+(a.num||'—')+' · '+(a.start||'?')+' to '+(a.end||'?')+'</div>'
+      + '<div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;">Auth #: '+(a.num||'—')+' · '+(a.start||'?')+' to '+(a.end||'?')+(authPattern(a)?' · <strong>'+authPattern(a).label+'</strong> ('+authPattern(a).weekly.toFixed(1)+' hrs/wk · '+dailyRangeText(authPattern(a))+')':'')+'</div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">'
-      + '<div style="background:var(--light);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:1.3rem;font-weight:700;color:var(--primary);">'+totalHours+'</div><div style="font-size:.65rem;color:var(--muted);">Total Hrs</div></div>'
+      + '<div style="background:var(--light);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:1.3rem;font-weight:700;color:var(--primary);">'+totalHours.toFixed(1)+'</div><div style="font-size:.65rem;color:var(--muted);">'+(authTot.derived?'Total Hrs *':'Total Hrs')+'</div></div>'
       + '<div style="background:var(--light);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:1.3rem;font-weight:700;color:#1d4ed8;">'+authHoursUsed.toFixed(1)+'</div><div style="font-size:.65rem;color:var(--muted);">Used</div></div>'
       + '<div style="background:var(--light);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:1.3rem;font-weight:700;color:'+warningColor+';">'+remaining.toFixed(1)+'</div><div style="font-size:.65rem;color:var(--muted);">Remaining</div></div>'
       + '</div>'
