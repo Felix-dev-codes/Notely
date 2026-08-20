@@ -18,7 +18,7 @@
     body{background:var(--bg);color:var(--text);font-family:var(--ui);min-height:100vh;display:flex;justify-content:center;padding:0 0 80px;overflow-x:hidden;}
     .app{width:100%;max-width:480px;background:var(--white);overflow-x:hidden;}
 
-    /* TOP BAR — mimics Notely */
+    /* TOP BAR */
     .topbar{background:var(--primary);padding:14px 16px 0;position:sticky;top:0;z-index:100;}
     .topbar-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
     .topbar-close{color:rgba(255,255,255,0.85);font-size:1.3rem;cursor:pointer;padding:4px;}
@@ -58,7 +58,7 @@
     textarea{border:1.5px solid var(--border);border-radius:10px;padding:12px;resize:none;line-height:1.6;margin-top:8px;}
     textarea:focus{border-color:var(--primary);}
 
-    /* CHECKBOXES — Notely style */
+    /* CHECKBOXES */
     .chk-list{display:flex;flex-direction:column;gap:0;}
     .chk-item{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
     .chk-item:last-child{border-bottom:none;}
@@ -170,6 +170,7 @@
     .role-therapist{background:var(--primary-glow);border:1px solid var(--primary);color:var(--primary);}
     .role-coordinator{background:rgba(245,158,11,.12);border:1px solid #f59e0b;color:#b45309;}
     .role-biller{background:rgba(109,40,217,.1);border:1px solid #6d28d9;color:#6d28d9;}
+    .role-superadmin{background:rgba(17,24,39,.08);border:1px solid #111827;color:#111827;}
     /* Bar showing who is acting, with a way to switch */
     .whoami{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--light);border-bottom:1px solid var(--border);padding:8px 16px;font-size:.76rem;}
     .whoami b{font-size:.8rem;}
@@ -1236,6 +1237,7 @@
             <option value="coordinator">Service Coordinator</option>
             <option value="biller">Billing</option>
             <option value="admin">Agency Admin</option>
+            <option value="superadmin">Super Admin</option>
           </select>
         </div>
         <div class="field-group">
@@ -1302,7 +1304,8 @@
       <div id="uEmpty" class="ibox">No staff added yet.</div>
       <div id="uList"></div>
 
-      <!-- MODULES -->
+      <!-- MODULES (super admin only) -->
+      <div id="modulesSection">
       <div class="div" style="margin-top:26px;"></div>
       <div class="slabel">Modules</div>
       <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5;">Agencies that use Bloom Note only for note taking can switch billing off. Nothing is deleted — claims, rates and ledger entries stay put and reappear if it is switched back on.</div>
@@ -1314,6 +1317,7 @@
         </span>
       </label>
       <div class="sbadge" id="modBadge">Saved</div>
+      </div>
 
       <!-- DATA & BACKUP -->
       <div class="div" style="margin-top:26px;"></div>
@@ -1962,7 +1966,11 @@ function showPage(page, el){
     }
   }
   if(page === 'sc'){ renderScChildSel(); renderScNotes(); }
-  if(page === 'users'){ renderUsers(); renderBackupStatus(); loadModulesForm(); }
+  if(page === 'users'){
+    renderUsers(); renderBackupStatus(); loadModulesForm();
+    var ms = document.getElementById('modulesSection');
+    if(ms) ms.style.display = isSuperAdmin() ? '' : 'none';
+  }
   if(page === 'alerts'){ renderAlerts(); }
   if(page === 'scripts'){
     renderDoctors(); renderRxSelects(); renderScripts(); loadEIOForm();
@@ -5070,6 +5078,7 @@ function modulesLoad(){
 }
 function billingEnabled(){ return modulesLoad().billing; }
 function saveModules(){
+  if(!isSuperAdmin()) return;
   localStorage.setItem('ei_modules_v4', JSON.stringify({billing: document.getElementById('modBilling').checked}));
   showBadge('modBadge');
   applyRoleTabs(activeUser ? activeUser.role : 'admin');
@@ -5249,16 +5258,20 @@ function renderBackupStatus(){
 // this browser and anyone with the device can switch users. It exists to shape
 // the UI per role and stamp notes with an author. Real access control has to
 // come from a server when this moves off localStorage.
-var ROLE_LABELS = {admin:'Agency Admin', biller:'Billing', therapist:'Therapist', coordinator:'Service Coordinator'};
-// Which tabs each role may open. Admin sees everything.
+var ROLE_LABELS = {superadmin:'Super Admin', admin:'Agency Admin', biller:'Billing', therapist:'Therapist', coordinator:'Service Coordinator'};
+// Which tabs each role may open. Super admin and admin see everything.
 var ROLE_TABS = {
+  superadmin:  ['note','sc','alerts','users','scripts','children','profile','history','attendance','servicelog','billing'],
   admin:       ['note','sc','alerts','users','scripts','children','profile','history','attendance','servicelog','billing'],
   biller:      ['alerts','scripts','children','profile','history','attendance','servicelog','billing'],
   therapist:   ['note','alerts','scripts','children','profile','history','attendance','servicelog','billing'],
   coordinator: ['sc','alerts','scripts','children','profile','history','billing']
 };
 // Only an admin edits the registries; everyone else sees them read-only.
-function isAdmin(){ return !activeUser || activeUser.role === 'admin'; }
+function isAdmin(){ return !activeUser || activeUser.role === 'admin' || activeUser.role === 'superadmin'; }
+// Which modules an agency runs is set above the agency, not by it. An install
+// with no staff yet counts as super admin so a fresh setup can get started.
+function isSuperAdmin(){ return !activeUser || activeUser.role === 'superadmin'; }
 // Submitting claims is a back-office job. Clinicians can see which of their
 // sessions have been billed, but not generate or send anything.
 function canBill(){ return !activeUser || activeUser.role === 'admin' || activeUser.role === 'biller'; }
